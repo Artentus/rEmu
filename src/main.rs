@@ -40,10 +40,9 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 const AUTHOR: &str = env!("CARGO_PKG_AUTHORS");
 
 // These should be adjustable but consts are fine for now
-const SCREEN_SCALE: f32 = 1.0;
+const SCREEN_SCALE: f32 = 1.3333;
 const ASPECT_RATIO: AspectRatio = AspectRatio::FourByThree;
-const SCALER: Scaler = scaler::hqx::HQ3X;
-const SCALER_FACTOR: usize = scaler::hqx::HQ3X_SCALING_FACTOR;
+const SCALER: Scaler = scaler::hqx::HQ4X;
 const FILTER: FilterMode = FilterMode::Linear;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -179,7 +178,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         Err(Box::new(ArgError))
     } else {
         let path = PathBuf::from(&args[1]);
-        run_emu(path, SCREEN_SCALE, ASPECT_RATIO, SCALER, SCALER_FACTOR)?;
+        run_emu(path, SCREEN_SCALE, ASPECT_RATIO, SCALER, FILTER)?;
 
         Ok(())
     }
@@ -190,7 +189,7 @@ fn run_emu<P: AsRef<Path>>(
     scale: f32,
     aspect_ratio: AspectRatio,
     scaler: Scaler,
-    scaler_factor: usize,
+    filter: FilterMode,
 ) -> Result<(), Box<dyn Error>> {
     let (_stream, stream_handle) = rodio::OutputStream::try_default()?;
     let audio_buffer = Arc::new(Mutex::new(SampleBuffer::new(1024 * 1024)));
@@ -201,7 +200,7 @@ fn run_emu<P: AsRef<Path>>(
         scale,
         aspect_ratio,
         scaler,
-        scaler_factor,
+        filter,
         audio_buffer,
         cartridge_file,
     );
@@ -214,9 +213,10 @@ fn run_emu<P: AsRef<Path>>(
 
     let (width, height) = {
         let screen_buffer = state.emu.screen();
-        let w =
-            (screen_buffer.width() * scaler_factor) as f32 * scale * aspect_ratio.width_factor();
-        let h = (screen_buffer.height() * scaler_factor) as f32 * scale;
+        let w = (screen_buffer.width() * scaler.scale_factor()) as f32
+            * scale
+            * aspect_ratio.width_factor();
+        let h = (screen_buffer.height() * scaler.scale_factor()) as f32 * scale;
         (w, h)
     };
     let window_mode = WindowMode::default().dimensions(width, height);
@@ -235,7 +235,7 @@ struct EmuState<'a> {
     emu: Nes<'a>,
     scale: [f32; 2],
     scaler: Scaler,
-    scaler_factor: usize,
+    filter: FilterMode,
     _cartridge: Rc<RefCell<Cartridge>>,
     controller_0: Buttons,
     controller_1: Buttons,
@@ -247,7 +247,7 @@ impl<'a> EmuState<'a> {
         scale: f32,
         aspect_ratio: AspectRatio,
         scaler: Scaler,
-        scaler_factor: usize,
+        filter: FilterMode,
         audio_buffer: Arc<Mutex<SampleBuffer>>,
         cartridge_file: P,
     ) -> Self {
@@ -261,7 +261,7 @@ impl<'a> EmuState<'a> {
             emu,
             scale: [scale as f32 * aspect_ratio.width_factor(), scale as f32],
             scaler,
-            scaler_factor,
+            filter,
             _cartridge: cartridge,
             controller_0: Buttons::empty(),
             controller_1: Buttons::empty(),
@@ -297,7 +297,8 @@ impl<'a> EventHandler for EmuState<'a> {
 
         let output_buffer_ref = &mut self.scaler_output_buffer;
 
-        let scaled_buffer_size = pixel_buffer.len() * self.scaler_factor * self.scaler_factor;
+        let scaled_buffer_size =
+            pixel_buffer.len() * self.scaler.scale_factor() * self.scaler.scale_factor();
         if let Some(scaled_pixel_buffer) = output_buffer_ref {
             if scaled_pixel_buffer.len() != scaled_buffer_size {
                 std::mem::drop(output_buffer_ref);
@@ -312,7 +313,7 @@ impl<'a> EventHandler for EmuState<'a> {
 
         let output_buffer_ref = &mut self.scaler_output_buffer;
         if let Some(scaled_pixel_buffer) = output_buffer_ref {
-            (self.scaler)(
+            self.scaler.scale(
                 pixel_buffer,
                 scaled_pixel_buffer,
                 screen_width,
@@ -321,11 +322,11 @@ impl<'a> EventHandler for EmuState<'a> {
 
             let mut screen = Image::from_rgba8(
                 ctx,
-                (screen_width * self.scaler_factor) as u16,
-                (screen_height * self.scaler_factor) as u16,
+                (screen_width * self.scaler.scale_factor()) as u16,
+                (screen_height * self.scaler.scale_factor()) as u16,
                 pixels_to_data(&scaled_pixel_buffer),
             )?;
-            screen.set_filter(FILTER);
+            screen.set_filter(self.filter);
             screen.set_wrap(WrapMode::Clamp, WrapMode::Clamp);
 
             let params = DrawParam::default().dest([0.0, 0.0]).scale(self.scale);

@@ -4,14 +4,23 @@ use crate::video::Color;
 use packed_simd::{i32x4, m32x4, u32x4, u8x4};
 use rayon::prelude::*;
 
-pub const HQ2X: Scaler = hq2x;
-pub const HQ2X_SCALING_FACTOR: usize = 2;
+const HQ2X_SCALING_FACTOR: usize = 2;
+pub const HQ2X: Scaler = Scaler {
+    function: hq2x,
+    scale_factor: HQ2X_SCALING_FACTOR,
+};
 
-pub const HQ3X: Scaler = hq3x;
-pub const HQ3X_SCALING_FACTOR: usize = 3;
+const HQ3X_SCALING_FACTOR: usize = 3;
+pub const HQ3X: Scaler = Scaler {
+    function: hq3x,
+    scale_factor: HQ3X_SCALING_FACTOR,
+};
 
-pub const HQ4X: Scaler = hq4x;
-pub const HQ4X_SCALING_FACTOR: usize = 4;
+const HQ4X_SCALING_FACTOR: usize = 4;
+pub const HQ4X: Scaler = Scaler {
+    function: hq4x,
+    scale_factor: HQ4X_SCALING_FACTOR,
+};
 
 fn yuv_diff(yuv1: ColorYuv, yuv2: ColorYuv) -> bool {
     const THRESHOLD: i32x4 = i32x4::new(0x00000030, 0x00000007, 0x00000006, i32::MAX);
