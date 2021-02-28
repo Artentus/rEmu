@@ -1,0 +1,18 @@
+[package]
+name = "remu"
+version = "0.1.0"
+authors = ["Mathis Rech"]
+edition = "2018"
+
+[dependencies]
+num-traits = "0.2"
+bitflags = "1.2"
+strum = "0.20"
+strum_macros = "0.20"
+bytemuck = "1.5"
+gfx = "0.18"
+gfx_device_gl = "0.16"
+ggez = "0.5"
+rodio = "0.13"
+packed_simd = { version = "0.3.4", package = "packed_simd_2" }
+rayon = "1.5"
