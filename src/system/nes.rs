@@ -21,8 +21,8 @@ pub struct Nes<'a> {
     cpu: Cpu6502<'a>,
     cpu_bus: EmuRef<Bus<'a, cpu6502::Address, cpu6502::Word>>,
     ram: EmuRef<Ram<cpu6502::Address, cpu6502::Word>>,
-    apu: EmuRef<Apu2A03>,
-    apu_control: EmuRef<Apu2A03Control>,
+    apu: EmuRef<Apu2A03<'a>>,
+    apu_control: EmuRef<Apu2A03Control<'a>>,
     dma: EmuRef<DmaInterface>,
     controller: EmuRef<VController>,
 
@@ -73,6 +73,8 @@ impl<'a> Nes<'a> {
         const DMA_ADDRESS: cpu6502::Address = Wrapping(0x4014);
         const CONTROLLER_START_ADDRESS: cpu6502::Address = Wrapping(0x4016);
 
+        let cpu_bus = Bus::create();
+
         let ram = Ram::create(RAM_SIZE, RAM_START_ADDRESS);
         let ram_clone = clone_ref(&ram);
         let mirrored_ram = mirror_component(ram_clone, RAM_MIRRORED_END_ADDRESS);
@@ -81,7 +83,7 @@ impl<'a> Nes<'a> {
         let ppu_clone = clone_ref(&ppu);
         let mirrored_ppu = mirror_component(ppu_clone, PPU_MIRRORED_END_ADDRESS);
 
-        let apu = Apu2A03::create(APU_START_ADDRESS);
+        let apu = Apu2A03::create(APU_START_ADDRESS, clone_ref(&cpu_bus));
         let apu_clone = clone_ref(&apu);
         let apu_control = Apu2A03Control::create(APU_CONTROLL_ADDRESS, clone_ref(&apu));
         let apu_control_clone = clone_ref(&apu_control);
@@ -92,7 +94,6 @@ impl<'a> Nes<'a> {
         let controller = VController::create(CONTROLLER_START_ADDRESS);
         let controller_clone = clone_ref(&controller);
 
-        let cpu_bus = Bus::create();
         {
             let mut cpu_bus_borrow = cpu_bus.borrow_mut();
             cpu_bus_borrow.add_component(mirrored_ram);

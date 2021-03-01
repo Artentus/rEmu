@@ -189,10 +189,11 @@ where
         let mut result = TWord::zero();
 
         for (_, component_ref) in self.components.iter() {
-            let mut component = component_ref.borrow_mut();
-            if let Some(range) = component.read_range() {
-                if range.contains(address) {
-                    result |= component.read(address - range.start);
+            if let Ok(mut component) = component_ref.try_borrow_mut() {
+                if let Some(range) = component.read_range() {
+                    if range.contains(address) {
+                        result |= component.read(address - range.start);
+                    }
                 }
             }
         }
@@ -202,10 +203,11 @@ where
 
     pub fn write(&self, address: TAddress, data: TWord) {
         for (_, component_ref) in self.components.iter() {
-            let mut component = component_ref.borrow_mut();
-            if let Some(range) = component.write_range() {
-                if range.contains(address) {
-                    component.write(address - range.start, data);
+            if let Ok(mut component) = component_ref.try_borrow_mut() {
+                if let Some(range) = component.write_range() {
+                    if range.contains(address) {
+                        component.write(address - range.start, data);
+                    }
                 }
             }
         }

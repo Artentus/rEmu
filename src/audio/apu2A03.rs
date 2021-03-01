@@ -1,5 +1,5 @@
 use crate::audio::*;
-use crate::bus::AddressRange;
+use crate::bus::{AddressRange, Bus};
 use crate::cpu::cpu6502;
 use crate::*;
 
@@ -295,9 +295,9 @@ impl Channel for PulseChannel {
         if self.enabled && self.sequencer.is_pulse_enabled() {
             let mask: u8 = 0x01 << self.sequence_pos;
             let output = (self.sequence & mask) >> self.sequence_pos;
-            (output as f32) * self.envelope.get_volume()
+            ((output as f32) * 2.0 - 1.0) * self.envelope.get_volume()
         } else {
-            0.5
+            0.0
         }
     }
 }
@@ -370,38 +370,38 @@ impl Channel for TriangleChannel {
 
     fn sample(&mut self) -> f32 {
         const SEQUENCE: [f32; 32] = [
-            15.0 / VOLUME_SCALE,
-            14.0 / VOLUME_SCALE,
-            13.0 / VOLUME_SCALE,
-            12.0 / VOLUME_SCALE,
-            11.0 / VOLUME_SCALE,
-            10.0 / VOLUME_SCALE,
-            9.0 / VOLUME_SCALE,
-            8.0 / VOLUME_SCALE,
-            7.0 / VOLUME_SCALE,
-            6.0 / VOLUME_SCALE,
-            5.0 / VOLUME_SCALE,
-            4.0 / VOLUME_SCALE,
-            3.0 / VOLUME_SCALE,
-            2.0 / VOLUME_SCALE,
-            1.0 / VOLUME_SCALE,
-            0.0 / VOLUME_SCALE,
-            0.0 / VOLUME_SCALE,
-            1.0 / VOLUME_SCALE,
-            2.0 / VOLUME_SCALE,
-            3.0 / VOLUME_SCALE,
-            4.0 / VOLUME_SCALE,
-            5.0 / VOLUME_SCALE,
-            6.0 / VOLUME_SCALE,
-            7.0 / VOLUME_SCALE,
-            8.0 / VOLUME_SCALE,
-            9.0 / VOLUME_SCALE,
-            10.0 / VOLUME_SCALE,
-            11.0 / VOLUME_SCALE,
-            12.0 / VOLUME_SCALE,
-            13.0 / VOLUME_SCALE,
-            14.0 / VOLUME_SCALE,
-            15.0 / VOLUME_SCALE,
+            (15.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (14.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (13.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (12.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (11.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (10.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (9.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (8.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (7.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (6.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (5.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (4.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (3.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (2.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (1.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (0.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (0.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (1.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (2.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (3.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (4.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (5.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (6.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (7.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (8.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (9.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (10.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (11.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (12.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (13.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (14.0 / VOLUME_SCALE) * 2.0 - 1.0,
+            (15.0 / VOLUME_SCALE) * 2.0 - 1.0,
         ];
 
         if self.enabled
@@ -411,16 +411,15 @@ impl Channel for TriangleChannel {
         {
             SEQUENCE[self.sequence_pos as usize]
         } else {
-            0.5
+            0.0
         }
     }
 }
 
 struct NoiseChannel {
     enabled: bool,
-    shift: u16,
+    shift: Wrapping<u16>,
     mode: bool,
-    feedback: u16,
     sequencer: Sequencer,
     envelope: Envelope,
 }
@@ -428,9 +427,8 @@ impl NoiseChannel {
     const fn new() -> Self {
         Self {
             enabled: true,
-            shift: 0x0001,
+            shift: Wrapping(0x0001),
             mode: false,
-            feedback: 0,
             sequencer: Sequencer::new(),
             envelope: Envelope::new(),
         }
@@ -473,65 +471,242 @@ impl Channel for NoiseChannel {
         }
 
         if self.sequencer.clock() {
-            let bit_1 = self.shift & 0x0001;
+            let bit_1 = self.shift & Wrapping(0x0001);
             let bit_2 = if self.mode {
-                (self.shift & 0x0040) >> 6
+                self.shift >> 6
             } else {
-                (self.shift & 0x0002) >> 1
-            };
-            self.feedback = bit_1 ^ bit_2;
-            self.shift |= self.feedback << 15;
-            self.shift = (self.shift & 0xFFFE) >> 1;
+                self.shift >> 1
+            } & Wrapping(0x0001);
+            let feedback = bit_1 ^ bit_2;
+            self.shift >>= 1;
+            self.shift |= feedback << 14;
         }
     }
 
     fn sample(&mut self) -> f32 {
-        if self.enabled && ((self.shift & 0x0001) != 0) {
-            (self.feedback as f32) * self.envelope.get_volume()
+        if self.enabled && ((self.shift.0 & 0x0001) == 0) {
+            let volume = self.envelope.get_volume();
+            if volume == 0.0 {
+                0.0
+            } else {
+                volume * 2.0 - 1.0
+            }
+        } else {
+            0.0
+        }
+    }
+}
+
+struct SampleReader<'a> {
+    bus: EmuRef<Bus<'a, cpu6502::Address, cpu6502::Word>>,
+    address: u16,
+    length: u16,
+    irq_enabled: bool,
+    irq: bool,
+    loop_enabled: bool,
+    current_pos: cpu6502::Address,
+    bytes_remaining: u16,
+    current: cpu6502::Word,
+    bits_remaining: u8,
+    output: bool,
+    has_ended: bool,
+}
+impl<'a> SampleReader<'a> {
+    #[inline]
+    const fn new(bus: EmuRef<Bus<'a, cpu6502::Address, cpu6502::Word>>) -> Self {
+        Self {
+            bus,
+            address: 0xC000,
+            length: 0x0001,
+            irq_enabled: true,
+            irq: false,
+            loop_enabled: false,
+            current_pos: Wrapping(0xC000),
+            bytes_remaining: 0,
+            current: Wrapping(0),
+            bits_remaining: 0,
+            output: false,
+            has_ended: true,
+        }
+    }
+
+    #[inline]
+    fn set_flags(&mut self, value: u8) {
+        self.irq_enabled = (value & 0x80) != 0;
+        self.loop_enabled = (value & 0x40) != 0;
+        if !self.irq_enabled {
+            self.irq = false;
+        }
+    }
+
+    #[inline]
+    fn set_address(&mut self, value: u8) {
+        self.address = 0xC000 | ((value as u16) << 6);
+    }
+
+    #[inline]
+    fn set_length(&mut self, value: u8) {
+        self.length = ((value as u16) << 4) | 0x0001;
+    }
+
+    #[inline]
+    fn restart(&mut self) {
+        if self.bytes_remaining == 0 {
+            self.current_pos = Wrapping(self.address);
+            self.bytes_remaining = self.length;
+            self.has_ended = false;
+        }
+    }
+
+    #[inline]
+    fn halt(&mut self) {
+        self.bytes_remaining = 0;
+        self.has_ended = true;
+    }
+
+    #[inline]
+    const fn output(&self) -> bool {
+        self.output
+    }
+
+    #[inline]
+    const fn irq(&self) -> bool {
+        self.irq
+    }
+
+    #[inline]
+    fn clear_irq(&mut self) {
+        self.irq = false;
+    }
+
+    #[inline]
+    const fn has_ended(&self) -> bool {
+        self.has_ended
+    }
+
+    fn clock(&mut self) {
+        if self.bits_remaining == 0 {
+            self.bits_remaining = 8;
+
+            if !self.has_ended {
+                if self.bytes_remaining == 0 {
+                    self.has_ended = true;
+    
+                    if self.loop_enabled {
+                        self.restart();
+                    } else if self.irq_enabled {
+                        self.irq = true;
+                    }
+                }
+
+                self.current = self.bus.borrow_mut().read(self.current_pos);
+                self.current_pos += Wrapping(1);
+                if self.current_pos.0 == 0 {
+                    self.current_pos = Wrapping(0x8000);
+                }
+                self.bytes_remaining -= 1;
+            }
+        }
+
+        self.output = (self.current.0 & 0x01) != 0;
+        self.current >>= 1;
+        self.bits_remaining -= 1;
+    }
+}
+
+struct DmcChannel<'a> {
+    enabled: bool,
+    rate: u8,
+    output: u8,
+    reader: SampleReader<'a>,
+    cycles: u8,
+}
+impl<'a> DmcChannel<'a> {
+    const fn new(bus: EmuRef<Bus<'a, cpu6502::Address, cpu6502::Word>>) -> Self {
+        Self {
+            enabled: true,
+            rate: 0,
+            output: 0,
+            reader: SampleReader::new(bus),
+            cycles: 0,
+        }
+    }
+}
+impl<'a> Channel for DmcChannel<'a> {
+    fn write(&mut self, address: u8, data: u8) {
+        const RATE_LOOKUP: [u8; 16] = [214, 190, 170, 160, 143, 127, 113, 107, 95, 80, 71, 64, 53,  42,  36,  27];
+
+        match address {
+            0 => {
+                self.reader.set_flags(data);
+                self.rate = RATE_LOOKUP[(data & 0x0F) as usize] + 1;
+            }
+            1 => {
+                self.output = data & 0x7F;
+            }
+            2 => {
+                self.reader.set_address(data);
+            }
+            3 => {
+                self.reader.set_length(data);
+            }
+            _ => {
+                panic!("Invalid channel register")
+            }
+        }
+    }
+
+    fn clock(&mut self, _quarter: bool, _half: bool) {
+        self.cycles += 1;
+        if self.cycles == self.rate {
+            self.cycles = 0;
+
+            self.reader.clock();
+            if !self.reader.has_ended() {
+                if self.reader.output() {
+                    if self.output <= 125 {
+                        self.output += 2;
+                    }
+                } else {
+                    if self.output >= 2 {
+                        self.output -= 2;
+                    }
+                }
+            }
+        }
+    }
+
+    fn sample(&mut self) -> f32 {
+        if self.enabled && !self.reader.has_ended {
+            (self.output as f32) / 127.0
         } else {
             0.5
         }
     }
 }
 
-struct DmcChannel {}
-impl DmcChannel {
-    const fn new() -> Self {
-        Self {}
-    }
-}
-impl Channel for DmcChannel {
-    fn write(&mut self, address: u8, data: u8) {}
-
-    fn clock(&mut self, quarter: bool, half: bool) {}
-
-    fn sample(&mut self) -> f32 {
-        0.0
-    }
-}
-
-pub struct Apu2A03 {
+pub struct Apu2A03<'a> {
     range: AddressRange<cpu6502::Address>,
     pulse_channel_1: PulseChannel,
     pulse_channel_2: PulseChannel,
     triangle_channel: TriangleChannel,
     noise_channel: NoiseChannel,
-    dmc_channel: DmcChannel,
+    dmc_channel: DmcChannel<'a>,
     even_cycle: bool,
     cycles: u32,
     t: f32,
 }
-impl Apu2A03 {
+impl<'a> Apu2A03<'a> {
     const SECONDS_PER_CLOCK: f32 = 1.0 / (NES_APU_CLOCK as f32);
 
-    pub fn new(range_start: cpu6502::Address) -> Self {
+    pub fn new(range_start: cpu6502::Address, bus: EmuRef<Bus<'a, cpu6502::Address, cpu6502::Word>>) -> Self {
         const MAX_ADDRESS: cpu6502::Address = Wrapping(0x0013);
 
         let pulse_channel_1 = PulseChannel::new(true);
         let pulse_channel_2 = PulseChannel::new(false);
         let triangle_channel = TriangleChannel::new();
         let noise_channel = NoiseChannel::new();
-        let dmc_channel = DmcChannel::new();
+        let dmc_channel = DmcChannel::new(bus);
 
         Self {
             range: AddressRange::new(range_start, range_start + MAX_ADDRESS),
@@ -547,8 +722,8 @@ impl Apu2A03 {
     }
 
     #[inline]
-    pub fn create(range_start: cpu6502::Address) -> EmuRef<Self> {
-        make_ref(Self::new(range_start))
+    pub fn create(range_start: cpu6502::Address, bus: EmuRef<Bus<'a, cpu6502::Address, cpu6502::Word>>) -> EmuRef<Self> {
+        make_ref(Self::new(range_start, bus))
     }
 
     fn clock_one(&mut self, buffer: &mut SampleBuffer) {
@@ -581,19 +756,19 @@ impl Apu2A03 {
                 let pulse_1_sample = self.pulse_channel_1.sample();
                 let pulse_2_sample = self.pulse_channel_2.sample();
                 let triangle_sample = self.triangle_channel.sample();
-                let noise_sample = 0.5; // todo: self.noise_channel.sample();
-                let dmc_sample = 0.5; // todo: self.dmc_channel.sample();
+                let noise_sample = self.noise_channel.sample();
+                let dmc_sample = self.dmc_channel.sample();
 
                 let sample = (0.00752 * (pulse_1_sample + pulse_2_sample))
                     + (0.00851 * triangle_sample)
                     + (0.00494 * noise_sample)
                     + (0.00335 * dmc_sample);
-                buffer.write((sample * VOLUME_SCALE) * 2.0 - 1.0); // convert from [0,1] to [-1,1]
+                buffer.write(sample * VOLUME_SCALE);
             }
         }
     }
 }
-impl BusComponent<cpu6502::Address, cpu6502::Word> for Apu2A03 {
+impl<'a> BusComponent<cpu6502::Address, cpu6502::Word> for Apu2A03<'a> {
     #[inline]
     fn read_range(&self) -> Option<bus::AddressRange<cpu6502::Address>> {
         None
@@ -622,7 +797,7 @@ impl BusComponent<cpu6502::Address, cpu6502::Word> for Apu2A03 {
         }
     }
 }
-impl<'a> AudioChip<'a, cpu6502::Address, cpu6502::Word> for Apu2A03 {
+impl<'a> AudioChip<'a, cpu6502::Address, cpu6502::Word> for Apu2A03<'a> {
     fn reset(&mut self) {
         self.pulse_channel_1.enabled = false;
         self.pulse_channel_1.envelope.length_counter.counter = 0;
@@ -644,13 +819,13 @@ impl<'a> AudioChip<'a, cpu6502::Address, cpu6502::Word> for Apu2A03 {
     }
 }
 
-pub struct Apu2A03Control {
+pub struct Apu2A03Control<'a> {
     range: AddressRange<cpu6502::Address>,
-    apu: EmuRef<Apu2A03>,
+    apu: EmuRef<Apu2A03<'a>>,
 }
-impl Apu2A03Control {
+impl<'a> Apu2A03Control<'a> {
     #[inline]
-    pub const fn new(range_start: cpu6502::Address, apu: EmuRef<Apu2A03>) -> Self {
+    pub const fn new(range_start: cpu6502::Address, apu: EmuRef<Apu2A03<'a>>) -> Self {
         Self {
             range: AddressRange::new(range_start, range_start),
             apu,
@@ -658,11 +833,11 @@ impl Apu2A03Control {
     }
 
     #[inline]
-    pub fn create(range_start: cpu6502::Address, apu: EmuRef<Apu2A03>) -> EmuRef<Self> {
+    pub fn create(range_start: cpu6502::Address, apu: EmuRef<Apu2A03<'a>>) -> EmuRef<Self> {
         make_ref(Self::new(range_start, apu))
     }
 }
-impl BusComponent<cpu6502::Address, cpu6502::Word> for Apu2A03Control {
+impl<'a> BusComponent<cpu6502::Address, cpu6502::Word> for Apu2A03Control<'a> {
     #[inline]
     fn read_range(&self) -> Option<AddressRange<cpu6502::Address>> {
         Some(self.range)
@@ -689,6 +864,12 @@ impl BusComponent<cpu6502::Address, cpu6502::Word> for Apu2A03Control {
         if apu_borrow.noise_channel.envelope.length_counter.counter > 0 {
             result |= 0x08
         }
+        if !apu_borrow.dmc_channel.reader.has_ended() {
+            result |= 0x10
+        }
+        if apu_borrow.dmc_channel.reader.irq() {
+            result |= 0x80
+        }
 
         Wrapping(result)
     }
@@ -698,7 +879,7 @@ impl BusComponent<cpu6502::Address, cpu6502::Word> for Apu2A03Control {
         let pulse_2_enabled = (data.0 & 0x02) != 0;
         let triangle_enabled = (data.0 & 0x04) != 0;
         let noise_enabled = (data.0 & 0x08) != 0;
-        // todo: let dmc_enabled = (data.0 & 0x10) != 0;
+        let dmc_enabled = (data.0 & 0x10) != 0;
 
         let mut apu_borrow = self.apu.borrow_mut();
 
@@ -720,6 +901,14 @@ impl BusComponent<cpu6502::Address, cpu6502::Word> for Apu2A03Control {
         apu_borrow.noise_channel.enabled = noise_enabled;
         if !noise_enabled {
             apu_borrow.noise_channel.envelope.length_counter.counter = 0
+        }
+
+        apu_borrow.dmc_channel.enabled = dmc_enabled;
+        apu_borrow.dmc_channel.reader.clear_irq();
+        if dmc_enabled {
+            apu_borrow.dmc_channel.reader.restart();
+        } else {
+            apu_borrow.dmc_channel.reader.halt();
         }
     }
 }
