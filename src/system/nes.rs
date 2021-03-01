@@ -89,7 +89,8 @@ impl<'a> Nes<'a> {
         let apu_clone = clone_ref(&apu);
         let apu_control = Apu2A03Control::create(APU_CONTROLL_ADDRESS, clone_ref(&apu));
         let apu_control_clone = clone_ref(&apu_control);
-        let apu_frame_counter = Apu2A03FrameCounter::create(APU_FRAME_COUNTER_ADDRESS, clone_ref(&apu));
+        let apu_frame_counter =
+            Apu2A03FrameCounter::create(APU_FRAME_COUNTER_ADDRESS, clone_ref(&apu));
         let apu_frame_counter_clone = clone_ref(&apu_frame_counter);
 
         let dma = DmaInterface::create(DMA_ADDRESS);

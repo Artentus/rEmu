@@ -129,7 +129,7 @@ impl Sweep {
                 self.reload = false;
             }
         }
-        
+
         self.sequencer.clock()
     }
 }
@@ -591,7 +591,7 @@ impl<'a> SampleReader<'a> {
             if !self.has_ended {
                 if self.bytes_remaining == 0 {
                     self.has_ended = true;
-    
+
                     if self.loop_enabled {
                         self.restart();
                     } else if self.irq_enabled {
@@ -634,7 +634,9 @@ impl<'a> DmcChannel<'a> {
 }
 impl<'a> Channel for DmcChannel<'a> {
     fn write(&mut self, address: u8, data: u8) {
-        const RATE_LOOKUP: [u8; 16] = [214, 190, 170, 160, 143, 127, 113, 107, 95, 80, 71, 64, 53,  42,  36,  27];
+        const RATE_LOOKUP: [u8; 16] = [
+            214, 190, 170, 160, 143, 127, 113, 107, 95, 80, 71, 64, 53, 42, 36, 27,
+        ];
 
         match address {
             0 => {
@@ -702,7 +704,10 @@ pub struct Apu2A03<'a> {
 impl<'a> Apu2A03<'a> {
     const SECONDS_PER_CLOCK: f32 = 1.0 / (NES_APU_CLOCK as f32);
 
-    pub fn new(range_start: cpu6502::Address, bus: EmuRef<Bus<'a, cpu6502::Address, cpu6502::Word>>) -> Self {
+    pub fn new(
+        range_start: cpu6502::Address,
+        bus: EmuRef<Bus<'a, cpu6502::Address, cpu6502::Word>>,
+    ) -> Self {
         const MAX_ADDRESS: cpu6502::Address = Wrapping(0x0013);
 
         let pulse_channel_1 = PulseChannel::new(true);
@@ -728,7 +733,10 @@ impl<'a> Apu2A03<'a> {
     }
 
     #[inline]
-    pub fn create(range_start: cpu6502::Address, bus: EmuRef<Bus<'a, cpu6502::Address, cpu6502::Word>>) -> EmuRef<Self> {
+    pub fn create(
+        range_start: cpu6502::Address,
+        bus: EmuRef<Bus<'a, cpu6502::Address, cpu6502::Word>>,
+    ) -> EmuRef<Self> {
         make_ref(Self::new(range_start, bus))
     }
 
@@ -750,7 +758,11 @@ impl<'a> Apu2A03<'a> {
             self.cycles += 1;
         }
 
-        let full = if self.counter_mode { self.cycles == 18641 } else { self.cycles == 14915 };
+        let full = if self.counter_mode {
+            self.cycles == 18641
+        } else {
+            self.cycles == 14915
+        };
         let half = (self.cycles == 7457) || full;
         let quarter = (self.cycles == 3729) || (self.cycles == 11186) || half;
         if full {
