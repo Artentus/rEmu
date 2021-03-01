@@ -61,6 +61,79 @@ impl Sequencer {
     }
 }
 
+struct Sweep {
+    sequencer: Sequencer,
+    is_channel_1: bool,
+    enabled: bool,
+    period: u8,
+    negate: bool,
+    shift: u8,
+    reload: bool,
+    divider: u8,
+    target_period: u16,
+}
+impl Sweep {
+    #[inline]
+    const fn new(is_channel_1: bool) -> Self {
+        Self {
+            sequencer: Sequencer::new(),
+            is_channel_1,
+            enabled: false,
+            period: 0,
+            negate: false,
+            shift: 0,
+            reload: false,
+            divider: 0,
+            target_period: 0,
+        }
+    }
+
+    fn update_target_period(&mut self) {
+        let shift_result = (Wrapping(self.sequencer.period) >> (self.shift as usize)).0;
+        if self.negate {
+            self.target_period = self.sequencer.period - shift_result;
+            if self.is_channel_1 {
+                self.target_period -= 1;
+            }
+        } else {
+            self.target_period = self.sequencer.period + shift_result;
+        }
+    }
+
+    fn set(&mut self, value: u8) {
+        self.enabled = (value & 0x80) != 0;
+        self.period = (value & 0x70) >> 4;
+        self.negate = (value & 0x08) != 0;
+        self.shift = value & 0x07;
+        self.reload = true;
+    }
+
+    fn clock(&mut self, half: bool) -> bool {
+        self.update_target_period();
+
+        if half {
+            self.divider -= 1;
+            if self.divider == 0 {
+                if (self.shift > 0)
+                    && self.enabled
+                    && self.sequencer.is_pulse_enabled()
+                    && (self.target_period <= 0x07FF)
+                {
+                    self.sequencer.period = self.target_period;
+                }
+                self.divider = self.period;
+            }
+
+            if self.reload {
+                self.divider = self.period;
+                self.reload = false;
+            }
+        }
+        
+        self.sequencer.clock()
+    }
+}
+
 struct LengthCounter {
     halt: bool,
     counter: u8,
@@ -158,83 +231,12 @@ impl Envelope {
     }
 }
 
-struct Sweep {
-    is_channel_1: bool,
-    enabled: bool,
-    period: u8,
-    negate: bool,
-    shift: u8,
-    reload: bool,
-    divider: u8,
-    target_period: u32,
-    real_period: u16,
-}
-impl Sweep {
-    #[inline]
-    const fn new(is_channel_1: bool) -> Self {
-        Self {
-            is_channel_1,
-            enabled: false,
-            period: 0,
-            negate: false,
-            shift: 0,
-            reload: false,
-            divider: 0,
-            target_period: 0,
-            real_period: 0,
-        }
-    }
-
-    fn update_target_period(&mut self) {
-        let shift_result = self.real_period >> self.shift;
-        if self.negate {
-            self.target_period = (self.real_period - shift_result) as u32;
-            if self.is_channel_1 {
-                self.target_period -= 1;
-            }
-        } else {
-            self.target_period = (self.real_period + shift_result) as u32;
-        }
-    }
-
-    fn set(&mut self, value: u8) {
-        self.enabled = (value & 0x80) != 0;
-        self.period = (value & 0x70) >> 4;
-        self.negate = (value & 0x08) != 0;
-        self.shift = value & 0x07;
-        self.reload = true;
-
-        self.update_target_period();
-    }
-
-    fn clock(&mut self, target: &mut u16) {
-        self.divider -= 1;
-        if self.divider == 0 {
-            if (self.shift > 0)
-                && self.enabled
-                && (self.real_period >= 8)
-                && (self.target_period <= 0x07FF)
-            {
-                self.real_period = (self.target_period & 0xFFFF) as u16;
-                *target = self.real_period * 2 + 1;
-            }
-            self.divider = self.period;
-        }
-
-        if self.reload {
-            self.divider = self.period;
-            self.reload = false;
-        }
-    }
-}
-
 struct PulseChannel {
     sequence: u8,
     sequence_pos: u8,
     enabled: bool,
-    sequencer: Sequencer,
-    envelope: Envelope,
     sweep: Sweep,
+    envelope: Envelope,
 }
 impl PulseChannel {
     const SEQUENCES: [u8; 4] = [0b00000001, 0b00000011, 0b00001111, 0b11111100];
@@ -244,9 +246,8 @@ impl PulseChannel {
             sequence: Self::SEQUENCES[0],
             sequence_pos: 0,
             enabled: true,
-            sequencer: Sequencer::new(),
-            envelope: Envelope::new(),
             sweep: Sweep::new(is_channel_1),
+            envelope: Envelope::new(),
         }
     }
 }
@@ -263,10 +264,10 @@ impl Channel for PulseChannel {
                 self.sweep.set(data);
             }
             2 => {
-                self.sequencer.set_lo(data);
+                self.sweep.sequencer.set_lo(data);
             }
             3 => {
-                self.sequencer.set_hi(data);
+                self.sweep.sequencer.set_hi(data);
                 self.envelope.length_counter.load(data);
                 self.envelope.start = true;
             }
@@ -283,16 +284,15 @@ impl Channel for PulseChannel {
 
         if half {
             self.envelope.length_counter.clock();
-            self.sweep.clock(&mut self.sequencer.period);
         }
 
-        if self.sequencer.clock() {
+        if self.sweep.clock(half) {
             self.sequence_pos = (self.sequence_pos + 1) & 0x07;
         }
     }
 
     fn sample(&mut self) -> f32 {
-        if self.enabled && self.sequencer.is_pulse_enabled() {
+        if self.enabled && self.sweep.sequencer.is_pulse_enabled() {
             let mask: u8 = 0x01 << self.sequence_pos;
             let output = (self.sequence & mask) >> self.sequence_pos;
             ((output as f32) * 2.0 - 1.0) * self.envelope.get_volume()
@@ -678,7 +678,7 @@ impl<'a> Channel for DmcChannel<'a> {
 
     fn sample(&mut self) -> f32 {
         if self.enabled && !self.reader.has_ended {
-            (self.output as f32) / 127.0
+            (self.output as f32) / VOLUME_SCALE
         } else {
             0.5
         }
@@ -692,8 +692,11 @@ pub struct Apu2A03<'a> {
     triangle_channel: TriangleChannel,
     noise_channel: NoiseChannel,
     dmc_channel: DmcChannel<'a>,
+    counter_mode: bool,
     even_cycle: bool,
     cycles: u32,
+    inhibit_irq: bool,
+    irq: bool,
     t: f32,
 }
 impl<'a> Apu2A03<'a> {
@@ -715,8 +718,11 @@ impl<'a> Apu2A03<'a> {
             triangle_channel,
             noise_channel,
             dmc_channel,
+            counter_mode: false,
             even_cycle: false,
             cycles: 0,
+            inhibit_irq: true,
+            irq: false,
             t: 0.0,
         }
     }
@@ -726,18 +732,32 @@ impl<'a> Apu2A03<'a> {
         make_ref(Self::new(range_start, bus))
     }
 
+    #[inline]
+    pub const fn dmc_irq_requested(&self) -> bool {
+        self.dmc_channel.reader.irq()
+    }
+
+    #[inline]
+    pub const fn irq_requested(&self) -> bool {
+        self.irq
+    }
+
     fn clock_one(&mut self, buffer: &mut SampleBuffer) {
         self.even_cycle = !self.even_cycle;
+        self.irq = false;
 
         if self.even_cycle {
             self.cycles += 1;
         }
 
-        let full = self.cycles == 14916;
+        let full = if self.counter_mode { self.cycles == 18641 } else { self.cycles == 14915 };
         let half = (self.cycles == 7457) || full;
         let quarter = (self.cycles == 3729) || (self.cycles == 11186) || half;
         if full {
-            self.cycles = 0
+            self.cycles = 0;
+            if !self.inhibit_irq && !self.counter_mode {
+                self.irq = true;
+            }
         }
 
         self.triangle_channel
@@ -910,5 +930,52 @@ impl<'a> BusComponent<cpu6502::Address, cpu6502::Word> for Apu2A03Control<'a> {
         } else {
             apu_borrow.dmc_channel.reader.halt();
         }
+    }
+}
+
+pub struct Apu2A03FrameCounter<'a> {
+    range: AddressRange<cpu6502::Address>,
+    apu: EmuRef<Apu2A03<'a>>,
+}
+impl<'a> Apu2A03FrameCounter<'a> {
+    #[inline]
+    pub const fn new(range_start: cpu6502::Address, apu: EmuRef<Apu2A03<'a>>) -> Self {
+        Self {
+            range: AddressRange::new(range_start, range_start),
+            apu,
+        }
+    }
+
+    #[inline]
+    pub fn create(range_start: cpu6502::Address, apu: EmuRef<Apu2A03<'a>>) -> EmuRef<Self> {
+        make_ref(Self::new(range_start, apu))
+    }
+}
+impl<'a> BusComponent<cpu6502::Address, cpu6502::Word> for Apu2A03FrameCounter<'a> {
+    #[inline]
+    fn read_range(&self) -> Option<AddressRange<cpu6502::Address>> {
+        Some(self.range)
+    }
+    #[inline]
+    fn write_range(&self) -> Option<AddressRange<cpu6502::Address>> {
+        Some(self.range)
+    }
+
+    fn read(&mut self, _address: cpu6502::Address) -> cpu6502::Word {
+        let mut result: u8 = 0;
+        let apu_borrow = self.apu.borrow();
+        if apu_borrow.counter_mode {
+            result |= 0x80;
+        }
+        if apu_borrow.inhibit_irq {
+            result |= 0x40;
+        }
+        Wrapping(result)
+    }
+
+    fn write(&mut self, _address: cpu6502::Address, data: cpu6502::Word) {
+        let mut apu_borrow = self.apu.borrow_mut();
+        apu_borrow.counter_mode = (data.0 & 0x80) != 0;
+        apu_borrow.inhibit_irq = (data.0 & 0x40) != 0;
     }
 }

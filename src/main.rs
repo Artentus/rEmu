@@ -40,10 +40,10 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 const AUTHOR: &str = env!("CARGO_PKG_AUTHORS");
 
 // These should be adjustable but consts are fine for now
-const SCREEN_SCALE: f32 = 1.3333;
+const SCREEN_SCALE: f32 = 4.0;
 const ASPECT_RATIO: AspectRatio = AspectRatio::FourByThree;
-const SCALER: Scaler = scaler::hqx::HQ4X;
-const FILTER: FilterMode = FilterMode::Linear;
+const SCALER: Scaler = scaler::NONE;
+const FILTER: FilterMode = FilterMode::Nearest;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 #[allow(dead_code)]

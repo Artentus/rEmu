@@ -1,4 +1,4 @@
-use crate::audio::apu2A03::{Apu2A03, Apu2A03Control};
+use crate::audio::apu2A03::{Apu2A03, Apu2A03Control, Apu2A03FrameCounter};
 use crate::audio::*;
 use crate::bus::*;
 use crate::cpu::cpu6502::Cpu6502;
@@ -23,6 +23,7 @@ pub struct Nes<'a> {
     ram: EmuRef<Ram<cpu6502::Address, cpu6502::Word>>,
     apu: EmuRef<Apu2A03<'a>>,
     apu_control: EmuRef<Apu2A03Control<'a>>,
+    apu_frame_counter: EmuRef<Apu2A03FrameCounter<'a>>,
     dma: EmuRef<DmaInterface>,
     controller: EmuRef<VController>,
 
@@ -70,6 +71,7 @@ impl<'a> Nes<'a> {
         const PPU_MIRRORED_END_ADDRESS: cpu6502::Address = Wrapping(0x3FFF);
         const APU_START_ADDRESS: cpu6502::Address = Wrapping(0x4000);
         const APU_CONTROLL_ADDRESS: cpu6502::Address = Wrapping(0x4015);
+        const APU_FRAME_COUNTER_ADDRESS: cpu6502::Address = Wrapping(0x4017);
         const DMA_ADDRESS: cpu6502::Address = Wrapping(0x4014);
         const CONTROLLER_START_ADDRESS: cpu6502::Address = Wrapping(0x4016);
 
@@ -87,6 +89,8 @@ impl<'a> Nes<'a> {
         let apu_clone = clone_ref(&apu);
         let apu_control = Apu2A03Control::create(APU_CONTROLL_ADDRESS, clone_ref(&apu));
         let apu_control_clone = clone_ref(&apu_control);
+        let apu_frame_counter = Apu2A03FrameCounter::create(APU_FRAME_COUNTER_ADDRESS, clone_ref(&apu));
+        let apu_frame_counter_clone = clone_ref(&apu_frame_counter);
 
         let dma = DmaInterface::create(DMA_ADDRESS);
         let dma_clone = clone_ref(&dma);
@@ -100,6 +104,7 @@ impl<'a> Nes<'a> {
             cpu_bus_borrow.add_component(mirrored_ppu);
             cpu_bus_borrow.add_component(apu_clone);
             cpu_bus_borrow.add_component(apu_control_clone);
+            cpu_bus_borrow.add_component(apu_frame_counter_clone);
             cpu_bus_borrow.add_component(dma_clone);
             cpu_bus_borrow.add_component(controller_clone);
         }
@@ -113,6 +118,7 @@ impl<'a> Nes<'a> {
             ram,
             apu,
             apu_control,
+            apu_frame_counter,
             dma,
             controller,
             ppu,
@@ -197,6 +203,10 @@ impl<'a> Nes<'a> {
         } else {
             false
         };
+        let apu_irq = {
+            let apu_borrow = self.apu.borrow();
+            apu_borrow.irq_requested() || apu_borrow.dmc_irq_requested()
+        };
 
         let mut dma = self.dma.borrow_mut();
         let cpu_cycles = if dma.active {
@@ -217,7 +227,7 @@ impl<'a> Nes<'a> {
 
             if nmi {
                 self.cpu.nmi()
-            } else if irq {
+            } else if irq || apu_irq {
                 self.cpu.irq()
             } else {
                 self.cpu.execute_next_instruction()
@@ -1316,17 +1326,21 @@ bitflags! {
 }
 
 struct VController {
-    range: AddressRange<cpu6502::Address>,
-    controller: [u8; 2],
+    read_range: AddressRange<cpu6502::Address>,
+    write_range: AddressRange<cpu6502::Address>,
+    controller: [Wrapping<u8>; 2],
     buffer: [Buttons; 2],
+    latch: bool,
 }
 impl VController {
     #[inline]
     fn new(start_address: cpu6502::Address) -> Self {
         Self {
-            range: AddressRange::new(start_address, start_address + Wrapping(1)),
-            controller: [0; 2],
+            read_range: AddressRange::new(start_address, start_address + Wrapping(1)),
+            write_range: AddressRange::new(start_address, start_address),
+            controller: [Wrapping(0); 2],
             buffer: [Buttons::empty(); 2],
+            latch: false,
         }
     }
 
@@ -1344,24 +1358,35 @@ impl VController {
 impl BusComponent<cpu6502::Address, cpu6502::Word> for VController {
     #[inline]
     fn read_range(&self) -> Option<AddressRange<cpu6502::Address>> {
-        Some(self.range)
+        Some(self.read_range)
     }
     #[inline]
     fn write_range(&self) -> Option<AddressRange<cpu6502::Address>> {
-        Some(self.range)
+        Some(self.write_range)
     }
 
     #[inline]
     fn read(&mut self, address: cpu6502::Address) -> cpu6502::Word {
+        // When reading while the controller is latched the bits are refreshed
+        if self.latch {
+            self.controller[address.0 as usize] = Wrapping(self.buffer[address.0 as usize].bits());
+        }
+
         // Reading is sequential
         let result = self.controller[address.0 as usize] >> 7;
         self.controller[address.0 as usize] <<= 1;
-        Wrapping(result)
+        result
     }
 
     #[inline]
-    fn write(&mut self, address: cpu6502::Address, _data: cpu6502::Word) {
+    fn write(&mut self, _address: cpu6502::Address, data: cpu6502::Word) {
         // Cannot write to the controllers, instead this stores the buffer
-        self.controller[address.0 as usize] = self.buffer[address.0 as usize].bits();
+        if (data.0 & 0x01) != 0 {
+            self.latch = true;
+        } else if self.latch {
+            self.controller[0] = Wrapping(self.buffer[0].bits());
+            self.controller[1] = Wrapping(self.buffer[1].bits());
+            self.latch = false;
+        }
     }
 }
