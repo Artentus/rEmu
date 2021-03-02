@@ -1,5 +1,8 @@
 pub mod cpu6502;
+#[allow(non_snake_case)]
+pub mod cpu65C816;
 
+use crate::types::HardwareInteger;
 use crate::*;
 
 pub trait CpuInstruction {}

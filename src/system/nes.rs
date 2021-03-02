@@ -41,11 +41,11 @@ pub struct Nes<'a> {
 impl<'a> Nes<'a> {
     pub fn new() -> Self {
         /* PPU bus */
-        const VRAM_START_ADDRESS: ppu2C02::Address = Wrapping(0x2000);
-        const VRAM_MIRRORED_END_ADDRESS: ppu2C02::Address = Wrapping(0x3EFF);
-        const PALETTE_SIZE: ppu2C02::Address = Wrapping(0x0020);
-        const PALETTE_START_ADDRESS: ppu2C02::Address = Wrapping(0x3F00);
-        const PALETTE_MIRRORED_END_ADDRESS: ppu2C02::Address = Wrapping(0x3FFF);
+        const VRAM_START_ADDRESS: ppu2C02::Address = ppu2C02::Address::new(0x2000);
+        const VRAM_MIRRORED_END_ADDRESS: ppu2C02::Address = ppu2C02::Address::new(0x3EFF);
+        const PALETTE_SIZE: ppu2C02::Address = ppu2C02::Address::new(0x0020);
+        const PALETTE_START_ADDRESS: ppu2C02::Address = ppu2C02::Address::new(0x3F00);
+        const PALETTE_MIRRORED_END_ADDRESS: ppu2C02::Address = ppu2C02::Address::new(0x3FFF);
 
         let vram = Vram::create(VRAM_START_ADDRESS);
         let vram_clone = clone_ref(&vram);
@@ -318,8 +318,8 @@ impl Mapper for NRom {
     }
 
     fn ppu_read(&self, addr: ppu2C02::Address) -> MapperReadResult {
-        if addr.0 <= 0x1FFF {
-            MapperReadResult::Address(Some(addr.0 as usize))
+        if addr <= 0x1FFF {
+            MapperReadResult::Address(Some(addr.0 .0 as usize))
         } else {
             MapperReadResult::Address(None)
         }
@@ -404,22 +404,22 @@ impl Mapper for Mmc1 {
     }
 
     fn ppu_read(&self, addr: ppu2C02::Address) -> MapperReadResult {
-        if addr.0 <= 0x1FFF {
+        if addr <= 0x1FFF {
             if (self.control & 0x10) != 0 {
                 // 4k mode
-                if addr.0 <= 0x0FFF {
+                if addr <= 0x0FFF {
                     MapperReadResult::Address(Some(
-                        (self.chr_bank_4_lo as usize) * 0x1000 + ((addr.0 & 0x0FFF) as usize),
+                        (self.chr_bank_4_lo as usize) * 0x1000 + ((addr & 0x0FFF).0 .0 as usize),
                     ))
                 } else {
                     MapperReadResult::Address(Some(
-                        (self.chr_bank_4_hi as usize) * 0x1000 + ((addr.0 & 0x0FFF) as usize),
+                        (self.chr_bank_4_hi as usize) * 0x1000 + ((addr & 0x0FFF).0 .0 as usize),
                     ))
                 }
             } else {
                 // 8k mode
                 MapperReadResult::Address(Some(
-                    (self.chr_bank_8 as usize) * CHR_BANK_SIZE + ((addr.0 & 0x1FFF) as usize),
+                    (self.chr_bank_8 as usize) * CHR_BANK_SIZE + ((addr & 0x1FFF).0 .0 as usize),
                 ))
             }
         } else {
@@ -546,8 +546,8 @@ impl Mapper for UxRom {
     }
 
     fn ppu_read(&self, addr: ppu2C02::Address) -> MapperReadResult {
-        if addr.0 <= 0x1FFF {
-            MapperReadResult::Address(Some(addr.0 as usize))
+        if addr <= 0x1FFF {
+            MapperReadResult::Address(Some(addr.0 .0 as usize))
         } else {
             MapperReadResult::Address(None)
         }
@@ -598,9 +598,9 @@ impl Mapper for CNRom {
     }
 
     fn ppu_read(&self, addr: ppu2C02::Address) -> MapperReadResult {
-        if addr.0 <= 0x1FFF {
+        if addr <= 0x1FFF {
             MapperReadResult::Address(Some(
-                (self.chr_bank as usize) * CHR_BANK_SIZE + (addr.0 as usize),
+                (self.chr_bank as usize) * CHR_BANK_SIZE + (addr.0 .0 as usize),
             ))
         } else {
             MapperReadResult::Address(None)
@@ -695,9 +695,9 @@ impl Mapper for Mmc3 {
     }
 
     fn ppu_read(&self, addr: ppu2C02::Address) -> MapperReadResult {
-        if addr.0 <= 0x1FFF {
-            let bank = ((addr.0 >> 10) & 0x07) as usize;
-            let mapped_addr = self.chr_bank[bank] + ((addr.0 & 0x03FF) as usize);
+        if addr <= 0x1FFF {
+            let bank = ((addr >> 10u32) & 0x07).0 .0 as usize;
+            let mapped_addr = self.chr_bank[bank] + ((addr & 0x03FF).0 .0 as usize);
             MapperReadResult::Address(Some(mapped_addr))
         } else {
             MapperReadResult::Address(None)
@@ -836,8 +836,8 @@ impl Mapper for AxRom {
     }
 
     fn ppu_read(&self, addr: ppu2C02::Address) -> MapperReadResult {
-        if addr.0 <= 0x1FFF {
-            MapperReadResult::Address(Some(addr.0 as usize))
+        if addr <= 0x1FFF {
+            MapperReadResult::Address(Some(addr.0 .0 as usize))
         } else {
             MapperReadResult::Address(None)
         }
@@ -896,9 +896,9 @@ impl Mapper for GxRom {
     }
 
     fn ppu_read(&self, addr: ppu2C02::Address) -> MapperReadResult {
-        if addr.0 <= 0x1FFF {
+        if addr <= 0x1FFF {
             MapperReadResult::Address(Some(
-                (self.chr_bank as usize) * CHR_BANK_SIZE + (addr.0 as usize),
+                (self.chr_bank as usize) * CHR_BANK_SIZE + (addr.0 .0 as usize),
             ))
         } else {
             MapperReadResult::Address(None)
@@ -942,8 +942,8 @@ pub struct Cartridge {
 impl Cartridge {
     const CPU_RANGE: AddressRange<cpu6502::Address> =
         AddressRange::new(Wrapping(0x4020), Wrapping(0xFFFF));
-    const PPU_RANGE: AddressRange<cpu6502::Address> =
-        AddressRange::new(Wrapping(0x0000), Wrapping(0x1FFF));
+    const PPU_RANGE: AddressRange<ppu2C02::Address> =
+        AddressRange::new(ppu2C02::Address::new(0x0000), ppu2C02::Address::new(0x1FFF));
 
     fn new(
         mapper: EmuRef<dyn Mapper>,
@@ -1073,7 +1073,7 @@ impl BusComponent<ppu2C02::Address, ppu2C02::Word> for CartridgePpuAdapter {
 
     fn read(&mut self, address: ppu2C02::Address) -> ppu2C02::Word {
         if self.chr_is_ram {
-            Wrapping(self.chr_rom[(address.0 & 0x1FFF) as usize])
+            Wrapping(self.chr_rom[(address & 0x1FFF).0 .0 as usize])
         } else {
             match self.mapper.borrow().ppu_read(address) {
                 MapperReadResult::Data(data) => data,
@@ -1086,7 +1086,7 @@ impl BusComponent<ppu2C02::Address, ppu2C02::Word> for CartridgePpuAdapter {
     #[inline]
     fn write(&mut self, address: ppu2C02::Address, data: ppu2C02::Word) {
         if self.chr_is_ram {
-            self.chr_rom[(address.0 & 0x1FFF) as usize] = data.0;
+            self.chr_rom[(address & 0x1FFF).0 .0 as usize] = data.0;
         }
     }
 }
@@ -1194,14 +1194,14 @@ struct Vram {
 impl Vram {
     #[inline]
     fn new(start_address: ppu2C02::Address) -> Self {
-        const SIZE: ppu2C02::Address = Wrapping(0x1000);
-        const TABLE_SIZE: ppu2C02::Address = Wrapping(0x0400);
+        const SIZE: ppu2C02::Address = ppu2C02::Address::new(0x1000);
+        const TABLE_SIZE: ppu2C02::Address = ppu2C02::Address::new(0x0400);
 
         Self {
-            range: AddressRange::new(start_address, start_address + SIZE - Wrapping(1)),
+            range: AddressRange::new(start_address, start_address + SIZE - ppu2C02::Address::ONE),
             tables: [
-                Ram::new(TABLE_SIZE, Wrapping(0)),
-                Ram::new(TABLE_SIZE, Wrapping(0)),
+                Ram::new(TABLE_SIZE, ppu2C02::Address::ZERO),
+                Ram::new(TABLE_SIZE, ppu2C02::Address::ZERO),
             ],
             cartridge: None,
         }
@@ -1233,15 +1233,15 @@ impl BusComponent<ppu2C02::Address, ppu2C02::Word> for Vram {
     }
 
     fn read(&mut self, address: ppu2C02::Address) -> ppu2C02::Word {
-        let table_addr = address & Wrapping(0x03FF);
+        let table_addr = address & ppu2C02::Address::new(0x03FF);
         if let Some(cartridge) = &self.cartridge {
             match cartridge.borrow().mirror() {
                 MirrorMode::Horizontal => {
-                    let table_index = (address >> 11).0 & 0x0001;
+                    let table_index = (address >> 11u32).0 .0 & 0x0001;
                     self.tables[table_index as usize].read(table_addr)
                 }
                 MirrorMode::Vertical => {
-                    let table_index = (address >> 10).0 & 0x0001;
+                    let table_index = (address >> 10u32).0 .0 & 0x0001;
                     self.tables[table_index as usize].read(table_addr)
                 }
                 MirrorMode::OneScreenLow => self.tables[0].read(table_addr),
@@ -1253,15 +1253,15 @@ impl BusComponent<ppu2C02::Address, ppu2C02::Word> for Vram {
     }
 
     fn write(&mut self, address: ppu2C02::Address, data: ppu2C02::Word) {
-        let table_addr = address & Wrapping(0x03FF);
+        let table_addr = address & ppu2C02::Address::new(0x03FF);
         if let Some(cartridge) = &self.cartridge {
             match cartridge.borrow().mirror() {
                 MirrorMode::Horizontal => {
-                    let table_index = (address >> 11).0 & 0x0001;
+                    let table_index = (address >> 11u32).0 .0 & 0x0001;
                     self.tables[table_index as usize].write(table_addr, data);
                 }
                 MirrorMode::Vertical => {
-                    let table_index = (address >> 10).0 & 0x0001;
+                    let table_index = (address >> 10u32).0 .0 & 0x0001;
                     self.tables[table_index as usize].write(table_addr, data);
                 }
                 MirrorMode::OneScreenLow => self.tables[0].write(table_addr, data),

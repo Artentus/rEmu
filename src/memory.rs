@@ -1,4 +1,5 @@
 use crate::bus::*;
+use crate::types::HardwareInteger;
 use crate::*;
 use std::marker::PhantomData;
 

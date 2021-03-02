@@ -2,7 +2,7 @@
 pub mod apu2A03;
 
 use crate::bus::BusComponent;
-use crate::*;
+use crate::types::HardwareInteger;
 
 pub type Sample = f32;
 

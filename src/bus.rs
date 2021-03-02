@@ -1,3 +1,4 @@
+use crate::types::HardwareInteger;
 use crate::*;
 use std::collections::HashMap;
 

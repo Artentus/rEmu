@@ -1,6 +1,7 @@
 #[allow(non_snake_case)]
 pub mod ppu2C02;
 
+use crate::types::HardwareInteger;
 use crate::*;
 use bus::BusComponent;
 use util::pixels_to_data;

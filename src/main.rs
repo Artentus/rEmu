@@ -1,4 +1,5 @@
 #![feature(const_fn)]
+#![feature(const_panic)]
 
 #[macro_use]
 extern crate bitflags;
@@ -8,17 +9,12 @@ use ggez::conf::{NumSamples, WindowMode, WindowSetup};
 use ggez::event::{EventHandler, KeyCode};
 use ggez::graphics::{DrawParam, FilterMode, Image, WrapMode};
 use ggez::{event, graphics, timer, Context, ContextBuilder, GameResult};
-use num_traits::{
-    FromPrimitive, Num, NumAssign, ToPrimitive, Unsigned, WrappingAdd, WrappingMul, WrappingShl,
-    WrappingShr, WrappingSub,
-};
 use scaler::Scaler;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::error::Error;
 use std::fmt::Display;
 use std::num::Wrapping;
-use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -32,6 +28,7 @@ pub mod cpu;
 pub mod memory;
 pub mod scaler;
 pub mod system;
+pub mod types;
 pub mod util;
 pub mod video;
 
@@ -71,38 +68,6 @@ pub fn make_ref<T>(value: T) -> EmuRef<T> {
 pub fn clone_ref<T: ?Sized>(r: &EmuRef<T>) -> EmuRef<T> {
     Rc::clone(r)
 }
-
-pub trait HardwareInteger:
-    Sized
-    + Clone
-    + Copy
-    + Num
-    + NumAssign
-    + FromPrimitive
-    + ToPrimitive
-    + Eq
-    + PartialOrd
-    + Ord
-    + Unsigned
-    + WrappingAdd
-    + WrappingSub
-    + WrappingMul
-    + WrappingShl
-    + WrappingShr
-    + Not
-    + BitAnd
-    + BitOr
-    + BitXor
-    + BitAndAssign
-    + BitOrAssign
-    + BitXorAssign
-{
-}
-impl HardwareInteger for Wrapping<u8> {}
-impl HardwareInteger for Wrapping<u16> {}
-impl HardwareInteger for Wrapping<u32> {}
-impl HardwareInteger for Wrapping<u64> {}
-impl HardwareInteger for Wrapping<u128> {}
 
 #[derive(Debug)]
 pub struct ArgError;

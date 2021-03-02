@@ -1,12 +1,11 @@
 use crate::bus::*;
 use crate::system::nes::Cartridge;
+use crate::types::*;
 use crate::video::*;
 use std::num::Wrapping;
 
-pub type Address = Wrapping<u16>;
-pub type Word = Wrapping<u8>;
-
-const BUS_MASK: Address = Wrapping(0x3FFF);
+pub type Address = u14w;
+pub type Word = u8w;
 
 const ADDR_CONTROL: cpu::cpu6502::Address = Wrapping(0);
 const ADDR_MASK: cpu::cpu6502::Address = Wrapping(1);
@@ -406,35 +405,33 @@ impl<'a> Ppu2C02<'a> {
     }
 
     fn read_bus(&self, mut addr: Address) -> Word {
-        addr &= BUS_MASK;
-        if addr.0 >= 0x3F00 {
-            addr &= Wrapping(0x001F);
-            if (addr.0 & 0x000F) % 4 == 0 {
-                addr = Wrapping(0x0000)
+        if addr >= 0x3F00 {
+            addr &= 0x001F;
+            if (addr & 0x000F) % 4 == 0 {
+                addr = Address::ZERO;
             }
-            addr |= Wrapping(0x3F00);
+            addr |= 0x3F00;
         }
         let bus_borrow = self.bus.borrow();
         bus_borrow.read(addr)
     }
 
     fn write_bus(&self, mut addr: Address, data: Word) {
-        addr &= BUS_MASK;
-        if addr.0 >= 0x3F00 {
-            addr &= Wrapping(0x001F);
-            if (addr.0 & 0x000F) % 4 == 0 {
-                addr &= Wrapping(0x000F)
+        if addr >= 0x3F00 {
+            addr &= 0x001F;
+            if (addr & 0x000F) % 4 == 0 {
+                addr &= 0x000F;
             }
-            addr |= Wrapping(0x3F00);
+            addr |= 0x3F00;
         }
         let bus_borrow = self.bus.borrow();
-        bus_borrow.write(addr & BUS_MASK, data);
+        bus_borrow.write(addr, data);
     }
 
-    fn get_palette_color(&self, palette: Address, pixel: Wrapping<u8>) -> Color {
+    fn get_palette_color(&self, palette: Address, pixel: u8w) -> Color {
         // A pixel with value of 0 always mirrors to the first color in the palette (background)
-        const BASE_ADDR: Address = Wrapping(0x3F00);
-        let addr = BASE_ADDR + (palette * Wrapping(4)) + Wrapping(pixel.0 as u16);
+        const BASE_ADDR: Address = Address::new(0x3F00);
+        let addr = BASE_ADDR + (palette * Address::new(4)) + Address::new(pixel.0 as u16);
         let color_index =
             self.read_bus(addr).0 & select(self.mask.contains(PpuMask::GREYSCALE), 0x30, 0x3F);
         NES_PALETTE[color_index as usize]
@@ -537,12 +534,12 @@ impl<'a> Ppu2C02<'a> {
             0 => {
                 self.load_shifters();
                 self.bg_next_id = self
-                    .read_bus(Wrapping(0x2000 | (self.vram_addr.value & 0x0FFF)))
+                    .read_bus(Address::new(0x2000 | (self.vram_addr.value & 0x0FFF)))
                     .0;
             }
             2 => {
                 self.bg_next_attr = self
-                    .read_bus(Wrapping(
+                    .read_bus(Address::new(
                         0x23C0
                             | (self.vram_addr.nametable_y << 11)
                             | (self.vram_addr.nametable_x << 10)
@@ -562,13 +559,13 @@ impl<'a> Ppu2C02<'a> {
                 let bg_table = self.control.contains(PpuControl::PATTERN_BACKGROUND);
                 let offset = select(bg_table, 1 << 12, 0);
                 let addr = offset + ((self.bg_next_id as u16) << 4) + self.vram_addr.fine_y;
-                self.bg_next_lsb = self.read_bus(Wrapping(addr)).0;
+                self.bg_next_lsb = self.read_bus(Address::new(addr)).0;
             }
             6 => {
                 let bg_table = self.control.contains(PpuControl::PATTERN_BACKGROUND);
                 let offset = select(bg_table, 1 << 12, 0);
                 let addr = offset + ((self.bg_next_id as u16) << 4) + self.vram_addr.fine_y + 8;
-                self.bg_next_msb = self.read_bus(Wrapping(addr)).0;
+                self.bg_next_msb = self.read_bus(Address::new(addr)).0;
             }
             7 => self.inc_x(),
             _ => {}
@@ -654,8 +651,8 @@ impl<'a> Ppu2C02<'a> {
                 let addr_lo = self.get_sprite_addr(sprite);
                 let addr_hi = addr_lo + 8;
 
-                let mut pattern_lo = self.read_bus(Wrapping(addr_lo)).0;
-                let mut pattern_hi = self.read_bus(Wrapping(addr_hi)).0;
+                let mut pattern_lo = self.read_bus(Address::new(addr_lo)).0;
+                let mut pattern_hi = self.read_bus(Address::new(addr_hi)).0;
                 if sprite.attr().contains(SpriteAttributes::FLIP_HOR) {
                     pattern_lo = flip_byte(pattern_lo);
                     pattern_hi = flip_byte(pattern_hi);
@@ -797,7 +794,7 @@ impl<'a> Ppu2C02<'a> {
 
         let x = (self.cycle as isize) - 1;
         let y = self.scanline as isize;
-        let color = self.get_palette_color(Wrapping(palette as u16), Wrapping(pixel));
+        let color = self.get_palette_color(Address::new(palette as u16), Wrapping(pixel));
         if (x >= 0) && (y >= 0) && (x < SCREEN_WIDTH as isize) && (y < SCREEN_HEIGHT as isize) {
             self.back_buffer.set_pixel(x as usize, y as usize, color);
         }
@@ -861,7 +858,7 @@ impl<'a> BusComponent<cpu::cpu6502::Address, cpu::cpu6502::Word> for Ppu2C02<'a>
             ADDR_PPU_DATA => {
                 // Everything except palette data is buffered one cycle
                 let mut tmp = self.ppu_data_buffer;
-                self.ppu_data_buffer = self.read_bus(Wrapping(self.vram_addr.value));
+                self.ppu_data_buffer = self.read_bus(Address::new(self.vram_addr.value));
                 if self.vram_addr.value >= 0x3F00 {
                     tmp = self.ppu_data_buffer;
                 }
@@ -913,7 +910,7 @@ impl<'a> BusComponent<cpu::cpu6502::Address, cpu::cpu6502::Word> for Ppu2C02<'a>
                 self.ppu_addr_latch = !self.ppu_addr_latch;
             }
             ADDR_PPU_DATA => {
-                self.write_bus(Wrapping(self.vram_addr.value), data);
+                self.write_bus(Address::new(self.vram_addr.value), data);
                 // Auto-increment
                 self.vram_addr.value +=
                     select(self.control.contains(PpuControl::INCREMENT_MODE), 32, 1);

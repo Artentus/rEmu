@@ -1,10 +1,10 @@
 use crate::bus::Bus;
 use crate::cpu::*;
-use std::num::Wrapping;
+use crate::types::*;
 use strum_macros::{AsRefStr, Display, IntoStaticStr};
 
-pub type Address = Wrapping<u16>;
-pub type Word = Wrapping<u8>;
+pub type Address = u16w;
+pub type Word = u8w;
 
 bitflags! {
     struct StatusFlags : u8 {
@@ -12,9 +12,9 @@ bitflags! {
         const C = 0b00000001;
         /// Zero
         const Z = 0b00000010;
-        /// Interrupt
+        /// IRQ disable
         const I = 0b00000100;
-        /// Decimal
+        /// Decimal mode
         const D = 0b00001000;
         /// Break
         const B = 0b00010000;
@@ -57,7 +57,7 @@ pub enum AddressingMode {
     IZX = 12,
     /// (Indirect zero-page) + Y register offset
     IZY = 13,
-    ///
+    /// Indirect + X register offset
     IAX = 14,
 }
 
@@ -186,7 +186,7 @@ pub enum BaseInstruction {
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub struct Instruction(BaseInstruction, AddressingMode, u32, bool);
-impl crate::cpu::CpuInstruction for Instruction {}
+impl CpuInstruction for Instruction {}
 
 #[derive(Debug)]
 enum InstructionData {
@@ -237,11 +237,17 @@ const RESET_VECTOR: Address = Wrapping(0xFFFC); // Where to load the program cou
 const SP_INIT: Word = Wrapping(0xFD); // The initial top of the stack
 
 pub struct Cpu6502<'a> {
+    /// Accumulator
     a: Word,
+    /// X index register
     x: Word,
+    /// Y index register
     y: Word,
+    /// Stack pointer
     sp: Word,
+    /// Program counter
     pc: Address,
+    /// Status register
     status: StatusFlags,
 
     bus: EmuRef<Bus<'a, Address, Word>>,
