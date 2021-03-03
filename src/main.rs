@@ -7,7 +7,7 @@ extern crate bitflags;
 use audio::SampleBuffer;
 use ggez::conf::{NumSamples, WindowMode, WindowSetup};
 use ggez::event::{EventHandler, KeyCode};
-use ggez::graphics::{DrawParam, FilterMode, Image, WrapMode};
+use ggez::graphics::{DrawParam, FilterMode, Font, Image, Text, TextFragment, WrapMode};
 use ggez::{event, graphics, timer, Context, ContextBuilder, GameResult};
 use scaler::Scaler;
 use std::cell::RefCell;
@@ -156,19 +156,7 @@ fn run_emu<P: AsRef<Path>>(
     scaler: Scaler,
     filter: FilterMode,
 ) -> Result<(), Box<dyn Error>> {
-    let (_stream, stream_handle) = rodio::OutputStream::try_default()?;
-    let audio_buffer = Arc::new(Mutex::new(SampleBuffer::new(1024 * 1024)));
-    let audio_source = SampleBufferSource::new(Arc::clone(&audio_buffer));
-    stream_handle.play_raw(audio_source)?;
-
-    let mut state = EmuState::new(
-        scale,
-        aspect_ratio,
-        scaler,
-        filter,
-        audio_buffer,
-        cartridge_file,
-    );
+    let emu = Nes::new();
 
     let window_setup = WindowSetup::default()
         .title(&format!("{} v{}", TITLE, VERSION))
@@ -177,20 +165,39 @@ fn run_emu<P: AsRef<Path>>(
         .samples(NumSamples::Zero); // We draw 2D sprites only
 
     let (width, height) = {
-        let screen_buffer = state.emu.screen();
+        let screen_buffer = emu.screen();
         let w = (screen_buffer.width() * scaler.scale_factor()) as f32
             * scale
             * aspect_ratio.width_factor();
         let h = (screen_buffer.height() * scaler.scale_factor()) as f32 * scale;
         (w, h)
     };
-    let window_mode = WindowMode::default().dimensions(width, height);
+    let window_mode = WindowMode::default().dimensions(width + (height * 0.5), height);
 
     let builder = ContextBuilder::new(TITLE, AUTHOR)
         .window_setup(window_setup)
         .window_mode(window_mode);
-
     let (ref mut ctx, ref mut event_loop) = builder.build()?;
+
+    const FONT_BYTES: &[u8] = include_bytes!("../res/SourceCodePro-Regular.ttf");
+    let font = Font::new_glyph_font_bytes(ctx, FONT_BYTES)?;
+
+    let (_stream, stream_handle) = rodio::OutputStream::try_default()?;
+    let audio_buffer = Arc::new(Mutex::new(SampleBuffer::new(1024 * 1024)));
+    let audio_source = SampleBufferSource::new(Arc::clone(&audio_buffer));
+    stream_handle.play_raw(audio_source)?;
+
+    let mut state = EmuState::new(
+        emu,
+        scale,
+        aspect_ratio,
+        scaler,
+        filter,
+        font,
+        audio_buffer,
+        cartridge_file,
+    );
+
     event::run(ctx, event_loop, &mut state)?;
 
     Ok(())
@@ -205,20 +212,23 @@ struct EmuState<'a> {
     controller_0: Buttons,
     controller_1: Buttons,
     scaler_output_buffer: Option<Box<[Color]>>,
+    font: Font,
     audio_buffer: Arc<Mutex<SampleBuffer>>,
+    run: bool,
 }
 impl<'a> EmuState<'a> {
     pub fn new<P: AsRef<Path>>(
+        mut emu: Nes<'a>,
         scale: f32,
         aspect_ratio: AspectRatio,
         scaler: Scaler,
         filter: FilterMode,
+        font: Font,
         audio_buffer: Arc<Mutex<SampleBuffer>>,
         cartridge_file: P,
     ) -> Self {
         let cartridge = load_cartridge(cartridge_file).expect("Invalid cartridge file");
 
-        let mut emu = Nes::new();
         emu.set_cartridge(clone_ref(&cartridge));
         emu.reset();
 
@@ -231,7 +241,9 @@ impl<'a> EmuState<'a> {
             controller_0: Buttons::empty(),
             controller_1: Buttons::empty(),
             scaler_output_buffer: None,
+            font,
             audio_buffer,
+            run: false,
         }
     }
 }
@@ -241,8 +253,10 @@ impl<'a> EventHandler for EmuState<'a> {
             .update_input_state(self.controller_0, self.controller_1);
 
         while timer::check_update_time(ctx, FRAME_RATE) {
-            let mut locked_buffer = self.audio_buffer.lock().unwrap();
-            self.emu.next_frame(&mut locked_buffer);
+            if self.run {
+                let mut locked_buffer = self.audio_buffer.lock().unwrap();
+                self.emu.next_frame(&mut locked_buffer);
+            }
         }
 
         graphics::set_window_title(
@@ -255,6 +269,8 @@ impl<'a> EventHandler for EmuState<'a> {
     }
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
+        graphics::clear(ctx, ggez::graphics::BLACK);
+
         let screen_buffer = self.emu.screen();
         let screen_width = screen_buffer.width();
         let screen_height = screen_buffer.height();
@@ -298,6 +314,20 @@ impl<'a> EventHandler for EmuState<'a> {
             graphics::draw(ctx, &screen, params)?;
         }
 
+        if !self.run {
+            let emu_info = format!("{}", self.emu);
+            let emu_info_frag = TextFragment::new(emu_info).font(self.font);
+            let emu_info_text = Text::new(emu_info_frag);
+            graphics::draw(
+                ctx,
+                &emu_info_text,
+                DrawParam::default().dest([
+                    ((screen_width * self.scaler.scale_factor()) as f32) * self.scale[0] + 10.0,
+                    10.0,
+                ]),
+            )?;
+        }
+
         graphics::present(ctx)?;
         timer::yield_now();
         Ok(())
@@ -322,6 +352,13 @@ impl<'a> EventHandler for EmuState<'a> {
             KeyCode::W => self.controller_0.insert(Buttons::START),
             KeyCode::E => self.controller_0.insert(Buttons::B),
             KeyCode::R => self.controller_0.insert(Buttons::A),
+            KeyCode::Space => self.run = !self.run,
+            KeyCode::S => {
+                if !self.run {
+                    let mut locked_buffer = self.audio_buffer.lock().unwrap();
+                    self.emu.next_instruction(&mut locked_buffer);
+                }
+            }
             _ => {}
         }
     }

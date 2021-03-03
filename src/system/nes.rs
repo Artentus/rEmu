@@ -190,7 +190,7 @@ impl<'a> Nes<'a> {
             .update_state(controller_0, controller_1);
     }
 
-    fn next_instruction(&mut self, buffer: &mut SampleBuffer) {
+    pub fn next_instruction(&mut self, buffer: &mut SampleBuffer) {
         let nmi = { self.ppu.borrow_mut().check_nmi() };
 
         let irq = if let Some(cartridge) = &self.cartridge {
@@ -249,6 +249,30 @@ impl<'a> Nes<'a> {
         while (buffer.len() - buffer_length_before) < ((SAMPLE_RATE / FRAME_RATE) as usize) {
             self.next_instruction(buffer);
         }
+    }
+}
+impl<'a> Display for Nes<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{}\n\n", self.cpu))?;
+
+        const RANGE: usize = 10;
+        let disassembly = self.cpu.disassemble_current(RANGE);
+        for i in 0..disassembly.len() {
+            if i == RANGE {
+                f.write_fmt(format_args!(
+                    "{:0>4X}  >> {}\n",
+                    disassembly[i].address(),
+                    disassembly[i]
+                ))?;
+            } else {
+                f.write_fmt(format_args!(
+                    "{:0>4X}     {}\n",
+                    disassembly[i].address(),
+                    disassembly[i]
+                ))?;
+            }
+        }
+        Ok(())
     }
 }
 

@@ -1,7 +1,7 @@
 use crate::bus::Bus;
 use crate::cpu::*;
 use crate::types::*;
-use strum_macros::{AsRefStr, Display, IntoStaticStr};
+use strum_macros::{AsRefStr, IntoStaticStr};
 
 pub type Address = u16w;
 pub type Word = u8w;
@@ -27,42 +27,85 @@ bitflags! {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Display, AsRefStr, IntoStaticStr)]
-pub enum AddressingMode {
+#[derive(PartialEq, Eq, Clone, Copy, Debug, strum_macros::Display, AsRefStr, IntoStaticStr)]
+enum AddressingMode {
     /// Implied
-    IMP = 0,
+    IMP,
     /// Immediate
-    IMM = 1,
+    IMM,
     /// Zero-page
-    ZP0 = 2,
+    ZP0,
     /// Zero-page + relative offset
-    ZPR = 3,
+    ZPR,
     /// Zero-page + X register offset
-    ZPX = 4,
+    ZPX,
     /// Zero-page + Y register offset
-    ZPY = 5,
+    ZPY,
     /// Relative
-    REL = 6,
+    REL,
     /// Absolute
-    ABS = 7,
+    ABS,
     /// Absolute + X register offset
-    ABX = 8,
+    ABX,
     /// Absolute + Y register offset
-    ABY = 9,
+    ABY,
     /// Indirect
-    IND = 10,
+    IND,
     /// Indirect zero page
-    IZP = 11,
+    IZP,
     /// Indirect (zero-page + X register offset)
-    IZX = 12,
+    IZX,
     /// (Indirect zero-page) + Y register offset
-    IZY = 13,
+    IZY,
     /// Indirect + X register offset
-    IAX = 14,
+    IAX,
+}
+impl AddressingMode {
+    fn read_next(&self, cpu: &mut Cpu6502) -> InstructionData {
+        match self {
+            AddressingMode::IMP => InstructionData::IMP,
+            AddressingMode::IMM => InstructionData::IMM(cpu.read_next_word()),
+            AddressingMode::ZP0 => InstructionData::ZP0(cpu.read_next_word()),
+            AddressingMode::ZPR => InstructionData::ZPR(cpu.read_next_word(), cpu.read_next_word()),
+            AddressingMode::ZPX => InstructionData::ZPX(cpu.read_next_word()),
+            AddressingMode::ZPY => InstructionData::ZPY(cpu.read_next_word()),
+            AddressingMode::REL => InstructionData::REL(cpu.read_next_word()),
+            AddressingMode::ABS => InstructionData::ABS(cpu.read_next_address()),
+            AddressingMode::ABX => InstructionData::ABX(cpu.read_next_address()),
+            AddressingMode::ABY => InstructionData::ABY(cpu.read_next_address()),
+            AddressingMode::IND => InstructionData::IND(cpu.read_next_address()),
+            AddressingMode::IZP => InstructionData::IZP(cpu.read_next_word()),
+            AddressingMode::IZX => InstructionData::IZX(cpu.read_next_word()),
+            AddressingMode::IZY => InstructionData::IZY(cpu.read_next_word()),
+            AddressingMode::IAX => InstructionData::IAX(cpu.read_next_address()),
+        }
+    }
+
+    fn read(&self, cpu: &Cpu6502, address: Address) -> InstructionData {
+        match self {
+            AddressingMode::IMP => InstructionData::IMP,
+            AddressingMode::IMM => InstructionData::IMM(cpu.read_word(address)),
+            AddressingMode::ZP0 => InstructionData::ZP0(cpu.read_word(address)),
+            AddressingMode::ZPR => {
+                InstructionData::ZPR(cpu.read_word(address), cpu.read_word(address + Wrapping(1)))
+            }
+            AddressingMode::ZPX => InstructionData::ZPX(cpu.read_word(address)),
+            AddressingMode::ZPY => InstructionData::ZPY(cpu.read_word(address)),
+            AddressingMode::REL => InstructionData::REL(cpu.read_word(address)),
+            AddressingMode::ABS => InstructionData::ABS(cpu.read_address(address)),
+            AddressingMode::ABX => InstructionData::ABX(cpu.read_address(address)),
+            AddressingMode::ABY => InstructionData::ABY(cpu.read_address(address)),
+            AddressingMode::IND => InstructionData::IND(cpu.read_address(address)),
+            AddressingMode::IZP => InstructionData::IZP(cpu.read_word(address)),
+            AddressingMode::IZX => InstructionData::IZX(cpu.read_word(address)),
+            AddressingMode::IZY => InstructionData::IZY(cpu.read_word(address)),
+            AddressingMode::IAX => InstructionData::IAX(cpu.read_address(address)),
+        }
+    }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Display, AsRefStr, IntoStaticStr)]
-pub enum BaseInstruction {
+#[derive(PartialEq, Eq, Clone, Copy, Debug, strum_macros::Display, AsRefStr, IntoStaticStr)]
+enum BaseInstruction {
     LDA = 0,
     LDX = 1,
     LDY = 2,
@@ -185,48 +228,268 @@ pub enum BaseInstruction {
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
-pub struct Instruction(BaseInstruction, AddressingMode, u32, bool);
-impl CpuInstruction for Instruction {}
+struct Instruction(BaseInstruction, AddressingMode, u32, bool);
 
 #[derive(Debug)]
-enum InstructionData {
+enum ExecutionData {
     None,
     Data(Word),
-    ZeroPageAddress(Word),
-    AbsoluteAddress(Address),
-    ZeroPageAndAbsoluteAddress(Word, Address),
+    Address(Address),
+    AddressPair(Address, Address),
 }
-impl InstructionData {
+impl ExecutionData {
     fn read_data(&self, cpu: &Cpu6502) -> Word {
         match self {
             Self::Data(data) => *data,
-            Self::ZeroPageAddress(address) => cpu.read_word(Wrapping(address.0 as u16)),
-            Self::AbsoluteAddress(address) => cpu.read_word(*address),
-            Self::ZeroPageAndAbsoluteAddress(address, _) => {
-                cpu.read_word(Wrapping(address.0 as u16))
-            }
+            Self::Address(address) => cpu.read_word(*address),
+            Self::AddressPair(address, _) => cpu.read_word(*address),
             _ => panic!("Invalid addressing mode"),
         }
     }
 
     fn write_data(&self, cpu: &Cpu6502, data: Word) {
         match self {
-            Self::ZeroPageAddress(address) => cpu.write_word(Wrapping(address.0 as u16), data),
-            Self::AbsoluteAddress(address) => cpu.write_word(*address, data),
-            Self::ZeroPageAndAbsoluteAddress(address, _) => {
-                cpu.write_word(Wrapping(address.0 as u16), data)
-            }
+            Self::Address(address) => cpu.write_word(*address, data),
+            Self::AddressPair(address, _) => cpu.write_word(*address, data),
             _ => panic!("Invalid addressing mode"),
         };
     }
 
     fn read_address(&self) -> Address {
         match self {
-            Self::ZeroPageAddress(address) => Wrapping(address.0 as u16),
-            Self::AbsoluteAddress(address) => *address,
-            Self::ZeroPageAndAbsoluteAddress(_, address) => *address,
+            Self::Address(address) => *address,
+            Self::AddressPair(_, address) => *address,
             _ => panic!("Invalid addressing mode"),
         }
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+enum InstructionData {
+    IMP,
+    IMM(Word),
+    ZP0(Word),
+    ZPR(Word, Word),
+    ZPX(Word),
+    ZPY(Word),
+    REL(Word),
+    ABS(Address),
+    ABX(Address),
+    ABY(Address),
+    IND(Address),
+    IZP(Word),
+    IZX(Word),
+    IZY(Word),
+    IAX(Address),
+}
+impl InstructionData {
+    fn to_execution_data(&self, cpu: &Cpu6502) -> (ExecutionData, bool) {
+        fn rel_to_abs(cpu: &Cpu6502, rel_address: Word) -> (Address, bool) {
+            let mut address = rel_address.0 as u16;
+            // Handle the negative case
+            if (address & 0x0080) != 0 {
+                address |= 0xFF00;
+            }
+
+            let abs_address = cpu.pc + Wrapping(address);
+            let page_before = cpu.pc & Wrapping(0xFF00);
+            let page_after = abs_address & Wrapping(0xFF00);
+            let page_crossed = page_before != page_after;
+
+            (abs_address, page_crossed)
+        }
+
+        match self {
+            InstructionData::IMP => (ExecutionData::None, false),
+            InstructionData::IMM(data) => (ExecutionData::Data(*data), false),
+            InstructionData::ZP0(zp_address) => {
+                (ExecutionData::Address(Wrapping(zp_address.0 as u16)), false)
+            }
+            InstructionData::ZPR(zp_address, rel_address) => {
+                let (abs_address, page_crossed) = rel_to_abs(cpu, *rel_address);
+                (
+                    ExecutionData::AddressPair(Wrapping(zp_address.0 as u16), abs_address),
+                    page_crossed,
+                )
+            }
+            InstructionData::ZPX(zp_address) => (
+                ExecutionData::Address(Wrapping((zp_address + cpu.x).0 as u16)),
+                false,
+            ),
+            InstructionData::ZPY(zp_address) => (
+                ExecutionData::Address(Wrapping((zp_address + cpu.y).0 as u16)),
+                false,
+            ),
+            InstructionData::REL(rel_address) => {
+                let (abs_address, page_crossed) = rel_to_abs(cpu, *rel_address);
+                (ExecutionData::Address(abs_address), page_crossed)
+            }
+            InstructionData::ABS(abs_address) => (ExecutionData::Address(*abs_address), false),
+            InstructionData::ABX(abs_address) => {
+                let address_after = abs_address + Wrapping(cpu.x.0 as u16);
+                let page_before = abs_address & Wrapping(0xFF00);
+                let page_after = address_after & Wrapping(0xFF00);
+
+                let page_crossed = page_before != page_after;
+                (ExecutionData::Address(address_after), page_crossed)
+            }
+            InstructionData::ABY(abs_address) => {
+                let address_after = abs_address + Wrapping(cpu.y.0 as u16);
+                let page_before = abs_address & Wrapping(0xFF00);
+                let page_after = address_after & Wrapping(0xFF00);
+
+                let page_crossed = page_before != page_after;
+                (ExecutionData::Address(address_after), page_crossed)
+            }
+            InstructionData::IND(ind_address) => {
+                let address = cpu.read_address_ind(*ind_address);
+                (ExecutionData::Address(address), false)
+            }
+            InstructionData::IZP(ind_address) => {
+                let address = cpu.read_address_ind(Wrapping(ind_address.0 as u16));
+                (ExecutionData::Address(address), false)
+            }
+            InstructionData::IZX(ind_address) => {
+                let address = cpu.read_address_ind(Wrapping((ind_address + cpu.x).0 as u16));
+                (ExecutionData::Address(address), false)
+            }
+            InstructionData::IZY(ind_address) => {
+                let address_before = cpu.read_address_ind(Wrapping(ind_address.0 as u16));
+                let page_before = address_before & Wrapping(0xFF00);
+
+                let address_after = address_before + Wrapping(cpu.y.0 as u16);
+                let page_after = address_after & Wrapping(0xFF00);
+
+                let page_crossed = page_before != page_after;
+                (ExecutionData::Address(address_after), page_crossed)
+            }
+            InstructionData::IAX(ind_address) => {
+                let address = cpu.read_address_ind(ind_address + Wrapping(cpu.x.0 as u16));
+                (ExecutionData::Address(address), false)
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Asm6502Instruction {
+    is_undefined: bool,
+    address: Address,
+    instruction: BaseInstruction,
+    data: InstructionData,
+}
+impl Asm6502Instruction {
+    const UNDEFINED: Self = Self {
+        is_undefined: true,
+        address: Wrapping(0),
+        instruction: BaseInstruction::HLT,
+        data: InstructionData::IMP,
+    };
+
+    #[inline]
+    const fn new(address: Address, instruction: BaseInstruction, data: InstructionData) -> Self {
+        Self {
+            is_undefined: false,
+            address,
+            instruction,
+            data,
+        }
+    }
+}
+impl Display for Asm6502Instruction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.is_undefined {
+            f.write_fmt(format_args!("UNKNOWN"))
+        } else {
+            match self.data {
+                InstructionData::IMP => f.write_str(self.instruction.into()),
+                InstructionData::IMM(data) => {
+                    f.write_fmt(format_args!("{:<4} #${:0>2X}", self.instruction, data))
+                }
+                InstructionData::ZP0(zp_address) => {
+                    f.write_fmt(format_args!("{:<4} ${:0>2X}", self.instruction, zp_address))
+                }
+                InstructionData::ZPR(zp_address, rel_address) => f.write_fmt(format_args!(
+                    "{:<4} ${:0>2X},${:0>2X}",
+                    self.instruction, zp_address, rel_address
+                )),
+                InstructionData::ZPX(zp_address) => f.write_fmt(format_args!(
+                    "{:<4} ${:0>2X},X",
+                    self.instruction, zp_address
+                )),
+                InstructionData::ZPY(zp_address) => f.write_fmt(format_args!(
+                    "{:<4} ${:0>2X},Y",
+                    self.instruction, zp_address
+                )),
+                InstructionData::REL(rel_address) => f.write_fmt(format_args!(
+                    "{:<4} ${:0>2X}",
+                    self.instruction, rel_address
+                )),
+                InstructionData::ABS(abs_address) => f.write_fmt(format_args!(
+                    "{:<4} ${:0>4X}",
+                    self.instruction, abs_address
+                )),
+                InstructionData::ABX(abs_address) => f.write_fmt(format_args!(
+                    "{:<4} ${:0>4X},X",
+                    self.instruction, abs_address
+                )),
+                InstructionData::ABY(abs_address) => f.write_fmt(format_args!(
+                    "{:<4} ${:0>4X},Y",
+                    self.instruction, abs_address
+                )),
+                InstructionData::IND(ind_address) => f.write_fmt(format_args!(
+                    "{:<4} (${:0>4X})",
+                    self.instruction, ind_address
+                )),
+                InstructionData::IZP(ind_address) => f.write_fmt(format_args!(
+                    "{:<4} (${:0>2X})",
+                    self.instruction, ind_address
+                )),
+                InstructionData::IZX(ind_address) => f.write_fmt(format_args!(
+                    "{:<4} (${:0>2X},X)",
+                    self.instruction, ind_address
+                )),
+                InstructionData::IZY(ind_address) => f.write_fmt(format_args!(
+                    "{:<4} (${:0>2X}),Y",
+                    self.instruction, ind_address
+                )),
+                InstructionData::IAX(ind_address) => f.write_fmt(format_args!(
+                    "{:<4} (${:0>4X},X)",
+                    self.instruction, ind_address
+                )),
+            }
+        }
+    }
+}
+impl AsmInstruction<Address> for Asm6502Instruction {
+    #[inline]
+    fn address(&self) -> Address {
+        self.address
+    }
+
+    fn byte_size(&self) -> usize {
+        match self.data {
+            InstructionData::IMP => 1,
+            InstructionData::IMM(_) => 2,
+            InstructionData::ZP0(_) => 2,
+            InstructionData::ZPR(_, _) => 3,
+            InstructionData::ZPX(_) => 2,
+            InstructionData::ZPY(_) => 2,
+            InstructionData::REL(_) => 2,
+            InstructionData::ABS(_) => 3,
+            InstructionData::ABX(_) => 3,
+            InstructionData::ABY(_) => 3,
+            InstructionData::IND(_) => 3,
+            InstructionData::IZP(_) => 2,
+            InstructionData::IZX(_) => 2,
+            InstructionData::IZY(_) => 2,
+            InstructionData::IAX(_) => 3,
+        }
+    }
+
+    #[inline]
+    fn mnemonic(&self) -> &str {
+        self.instruction.into()
     }
 }
 
@@ -368,12 +631,11 @@ impl<'a> Cpu6502<'a> {
         let cycles = instruction.2;
         let add_cycle_on_page_cross = instruction.3;
 
-        let addressing = ADDRESSING_LOOKUP[addressing_mode as usize](self);
-        let instruction_data = addressing.0;
-        let page_crossed = addressing.1;
+        let instruction_data = addressing_mode.read_next(self);
+        let (execution_data, page_crossed) = instruction_data.to_execution_data(self);
 
         let execute = EXECUTE_LOOKUP[base_instruction as usize];
-        let branch_taken = execute(self, instruction_data);
+        let branch_taken = execute(self, execution_data);
 
         cycles
             + if page_crossed && add_cycle_on_page_cross {
@@ -382,6 +644,84 @@ impl<'a> Cpu6502<'a> {
                 0
             }
             + if branch_taken { 1 } else { 0 }
+    }
+
+    fn disassemble(&self, address: Address, lookup: &[Instruction; 256]) -> Asm6502Instruction {
+        let op_code = self.read_word(address).0 as usize;
+        let instruction = lookup[op_code];
+        let base_instruction = instruction.0;
+        let addressing_mode = instruction.1;
+
+        let instruction_data = addressing_mode.read(self, address + Wrapping(1));
+        Asm6502Instruction::new(address, base_instruction, instruction_data)
+    }
+
+    fn disassemble_forward(
+        &self,
+        mut address: Address,
+        n: usize,
+        lookup: &[Instruction; 256],
+    ) -> Box<[Asm6502Instruction]> {
+        let mut instructions: Vec<Asm6502Instruction> = Vec::with_capacity(n);
+        for _ in 0..n {
+            let instruction = self.disassemble(address, lookup);
+            instructions.push(instruction);
+            address += Wrapping(instruction.byte_size() as u16);
+        }
+        instructions.into_boxed_slice()
+    }
+
+    fn disassemble_backward(
+        &self,
+        address: Address,
+        n: usize,
+        lookup: &[Instruction; 256],
+    ) -> Box<[Asm6502Instruction]> {
+        // This does not necessarily find the actual disassembly, only a good guess
+
+        fn disassemble_up_to(
+            cpu: &Cpu6502,
+            mut address: Address,
+            end: Address,
+            lookup: &[Instruction; 256],
+        ) -> (Address, Box<[Asm6502Instruction]>) {
+            let mut instructions: Vec<Asm6502Instruction> = Vec::new();
+            while address < end {
+                let instruction = cpu.disassemble(address, lookup);
+                instructions.push(instruction);
+                address += Wrapping(instruction.byte_size() as u16);
+            }
+            (address - end, instructions.into_boxed_slice())
+        }
+
+        fn search_disassemblies(
+            cpu: &Cpu6502,
+            address: Address,
+            n: usize,
+            lookup: &[Instruction; 256],
+        ) -> Option<Box<[Asm6502Instruction]>> {
+            let mut search_address = address - Wrapping((n as u16) * 3);
+            while search_address != address {
+                let (overshoot, search_result) =
+                    disassemble_up_to(cpu, search_address, address, lookup);
+                if overshoot.0 == 0 {
+                    // Search address yielded a dissasembly of correct size
+                    return Some(search_result);
+                } else {
+                    search_address += Wrapping(1);
+                }
+            }
+            None
+        }
+
+        let mut instructions = vec![Asm6502Instruction::UNDEFINED; n];
+        if let Some(search_result) = search_disassemblies(self, address, n, lookup) {
+            let result_start = n.saturating_sub(search_result.len());
+            let result_offset = search_result.len().saturating_sub(n);
+            instructions[result_start..].copy_from_slice(&search_result[result_offset..]);
+        }
+
+        instructions.into_boxed_slice()
     }
 
     pub fn irq(&mut self) -> u32 {
@@ -412,7 +752,21 @@ impl<'a> Cpu6502<'a> {
         8
     }
 }
-impl<'a> Cpu<Address, Word, Instruction> for Cpu6502<'a> {
+impl<'a> Display for Cpu6502<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("N  V  -  B  D  I  Z  C\n{}  {}  {}  {}  {}  {}  {}  {}\nA: ${:0>2X}  X: ${:0>2X}  Y: ${:0>2X}\nPC: ${:0>4X}    SP: $01{:0>2X}",
+        self.status.contains(StatusFlags::N) as u8,
+        self.status.contains(StatusFlags::V) as u8,
+        self.status.contains(StatusFlags::U) as u8,
+        self.status.contains(StatusFlags::B) as u8,
+        self.status.contains(StatusFlags::D) as u8,
+        self.status.contains(StatusFlags::I) as u8,
+        self.status.contains(StatusFlags::Z) as u8,
+        self.status.contains(StatusFlags::C) as u8,
+        self.a, self.x, self.y, self.pc, self.sp))
+    }
+}
+impl<'a> Cpu<Address, Word, Asm6502Instruction> for Cpu6502<'a> {
     fn reset(&mut self) -> u32 {
         self.a = Wrapping(0);
         self.x = Wrapping(0);
@@ -429,12 +783,23 @@ impl<'a> Cpu<Address, Word, Instruction> for Cpu6502<'a> {
         let instruction = self.read_next_instruction();
         self.execute_instruction(instruction)
     }
+
+    fn disassemble_current(&self, range: usize) -> Box<[Asm6502Instruction]> {
+        let back = self.disassemble_backward(self.pc, range, &INSTRUCTION_LOOKUP_6502);
+        let front = self.disassemble_forward(self.pc, range + 1, &INSTRUCTION_LOOKUP_6502);
+
+        let mut result = vec![Asm6502Instruction::UNDEFINED; back.len() + front.len()];
+        result[..back.len()].copy_from_slice(&back);
+        result[back.len()..].copy_from_slice(&front);
+        result.into_boxed_slice()
+    }
 }
 
 pub struct Cpu65C02<'a> {
     base_cpu: Cpu6502<'a>,
 }
 impl<'a> Cpu65C02<'a> {
+    #[inline]
     pub const fn new(bus: EmuRef<Bus<'a, Address, Word>>) -> Self {
         let mut base_cpu = Cpu6502::new(bus);
         base_cpu.emulate_indirect_jmp_bug = false; // Fixed
@@ -462,7 +827,13 @@ impl<'a> Cpu65C02<'a> {
         self.base_cpu.nmi()
     }
 }
-impl<'a> Cpu<Address, Word, Instruction> for Cpu65C02<'a> {
+impl<'a> Display for Cpu65C02<'a> {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.base_cpu.fmt(f)
+    }
+}
+impl<'a> Cpu<Address, Word, Asm6502Instruction> for Cpu65C02<'a> {
     #[inline]
     fn reset(&mut self) -> u32 {
         self.base_cpu.reset()
@@ -473,262 +844,112 @@ impl<'a> Cpu<Address, Word, Instruction> for Cpu65C02<'a> {
         let instruction = self.read_next_instruction();
         self.base_cpu.execute_instruction(instruction)
     }
-}
 
-#[inline]
-fn addressing_imp(_: &mut Cpu6502) -> (InstructionData, bool) {
-    (InstructionData::None, false)
-}
+    fn disassemble_current(&self, range: usize) -> Box<[Asm6502Instruction]> {
+        let back =
+            self.base_cpu
+                .disassemble_backward(self.base_cpu.pc, range, &INSTRUCTION_LOOKUP_65C02);
+        let front = self.base_cpu.disassemble_forward(
+            self.base_cpu.pc,
+            range + 1,
+            &INSTRUCTION_LOOKUP_65C02,
+        );
 
-#[inline]
-fn addressing_imm(cpu: &mut Cpu6502) -> (InstructionData, bool) {
-    (InstructionData::Data(cpu.read_next_word()), false)
-}
-
-#[inline]
-fn addressing_zp0(cpu: &mut Cpu6502) -> (InstructionData, bool) {
-    (
-        InstructionData::ZeroPageAddress(cpu.read_next_word()),
-        false,
-    )
-}
-
-fn addressing_zpr(cpu: &mut Cpu6502) -> (InstructionData, bool) {
-    let zp_address = cpu.read_next_word();
-
-    let mut rel_address = cpu.read_next_word().0 as u16;
-    // Handle the negative case
-    if (rel_address & 0x0080) != 0 {
-        rel_address |= 0xFF00;
+        let mut result = vec![Asm6502Instruction::UNDEFINED; back.len() + front.len()];
+        result[..back.len()].copy_from_slice(&back);
+        result[back.len()..].copy_from_slice(&front);
+        result.into_boxed_slice()
     }
-
-    let abs_address = cpu.pc + Wrapping(rel_address);
-    let page_before = cpu.pc & Wrapping(0xFF00);
-    let page_after = abs_address & Wrapping(0xFF00);
-    let page_crossed = page_before != page_after;
-
-    (
-        InstructionData::ZeroPageAndAbsoluteAddress(zp_address, abs_address),
-        page_crossed,
-    )
 }
 
 #[inline]
-fn addressing_zpx(cpu: &mut Cpu6502) -> (InstructionData, bool) {
-    (
-        InstructionData::ZeroPageAddress(cpu.read_next_word() + cpu.x),
-        false,
-    )
-}
-
-#[inline]
-fn addressing_zpy(cpu: &mut Cpu6502) -> (InstructionData, bool) {
-    (
-        InstructionData::ZeroPageAddress(cpu.read_next_word() + cpu.y),
-        false,
-    )
-}
-
-fn addressing_rel(cpu: &mut Cpu6502) -> (InstructionData, bool) {
-    let mut address = cpu.read_next_word().0 as u16;
-    // Handle the negative case
-    if (address & 0x0080) != 0 {
-        address |= 0xFF00;
-    }
-
-    let abs_address = cpu.pc + Wrapping(address);
-    let page_before = cpu.pc & Wrapping(0xFF00);
-    let page_after = abs_address & Wrapping(0xFF00);
-    let page_crossed = page_before != page_after;
-
-    (InstructionData::AbsoluteAddress(abs_address), page_crossed)
-}
-
-#[inline]
-fn addressing_abs(cpu: &mut Cpu6502) -> (InstructionData, bool) {
-    (
-        InstructionData::AbsoluteAddress(cpu.read_next_address()),
-        false,
-    )
-}
-
-fn addressing_abx(cpu: &mut Cpu6502) -> (InstructionData, bool) {
-    let address_before = cpu.read_next_address();
-    let page_before = address_before & Wrapping(0xFF00);
-
-    let address_after = address_before + Wrapping(cpu.x.0 as u16);
-    let page_after = address_after & Wrapping(0xFF00);
-
-    let page_crossed = page_before != page_after;
-    (
-        InstructionData::AbsoluteAddress(address_after),
-        page_crossed,
-    )
-}
-
-fn addressing_aby(cpu: &mut Cpu6502) -> (InstructionData, bool) {
-    let address_before = cpu.read_next_address();
-    let page_before = address_before & Wrapping(0xFF00);
-
-    let address_after = address_before + Wrapping(cpu.y.0 as u16);
-    let page_after = address_after & Wrapping(0xFF00);
-
-    let page_crossed = page_before != page_after;
-    (
-        InstructionData::AbsoluteAddress(address_after),
-        page_crossed,
-    )
-}
-
-#[inline]
-fn addressing_ind(cpu: &mut Cpu6502) -> (InstructionData, bool) {
-    let pointer = cpu.read_next_address();
-    let address = cpu.read_address_ind(pointer);
-    (InstructionData::AbsoluteAddress(address), false)
-}
-
-#[inline]
-fn addressing_izp(cpu: &mut Cpu6502) -> (InstructionData, bool) {
-    let pointer = Wrapping(cpu.read_next_word().0 as u16);
-    let address = cpu.read_address_ind(pointer);
-    (InstructionData::AbsoluteAddress(address), false)
-}
-
-#[inline]
-fn addressing_izx(cpu: &mut Cpu6502) -> (InstructionData, bool) {
-    let pointer = Wrapping((cpu.read_next_word() + cpu.x).0 as u16);
-    let address = cpu.read_address_ind(pointer);
-    (InstructionData::AbsoluteAddress(address), false)
-}
-
-fn addressing_izy(cpu: &mut Cpu6502) -> (InstructionData, bool) {
-    let pointer = Wrapping(cpu.read_next_word().0 as u16);
-    let address_before = cpu.read_address_ind(pointer);
-    let page_before = address_before & Wrapping(0xFF00);
-
-    let address_after = address_before + Wrapping(cpu.y.0 as u16);
-    let page_after = address_after & Wrapping(0xFF00);
-
-    let page_crossed = page_before != page_after;
-    (
-        InstructionData::AbsoluteAddress(address_after),
-        page_crossed,
-    )
-}
-
-#[inline]
-fn addressing_iax(cpu: &mut Cpu6502) -> (InstructionData, bool) {
-    let pointer = cpu.read_next_address() + Wrapping(cpu.x.0 as u16);
-    let address = cpu.read_address_ind(pointer);
-    (InstructionData::AbsoluteAddress(address), false)
-}
-
-const ADDRESSING_LOOKUP: [fn(&mut Cpu6502) -> (InstructionData, bool); 15] = [
-    addressing_imp, // IMP
-    addressing_imm, // IMM
-    addressing_zp0, // ZP0
-    addressing_zpr, // ZPR
-    addressing_zpx, // ZPX
-    addressing_zpy, // ZPY
-    addressing_rel, // REL
-    addressing_abs, // ABS
-    addressing_abx, // ABX
-    addressing_aby, // ABY
-    addressing_ind, // IND
-    addressing_izp, // IZP
-    addressing_izx, // IZX
-    addressing_izy, // IZY
-    addressing_iax, // IAX
-];
-
-#[inline]
-fn execute_lda(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_lda(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     cpu.a = data.read_data(cpu);
     cpu.set_zn_flags(cpu.a);
     false
 }
 
 #[inline]
-fn execute_ldx(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_ldx(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     cpu.x = data.read_data(cpu);
     cpu.set_zn_flags(cpu.x);
     false
 }
 
 #[inline]
-fn execute_ldy(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_ldy(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     cpu.y = data.read_data(cpu);
     cpu.set_zn_flags(cpu.y);
     false
 }
 
 #[inline]
-fn execute_sta(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_sta(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     data.write_data(cpu, cpu.a);
     false
 }
 
 #[inline]
-fn execute_stx(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_stx(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     data.write_data(cpu, cpu.x);
     false
 }
 
 #[inline]
-fn execute_sty(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_sty(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     data.write_data(cpu, cpu.y);
     false
 }
 
 #[inline]
-fn execute_tax(cpu: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_tax(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
     cpu.x = cpu.a;
     cpu.set_zn_flags(cpu.x);
     false
 }
 
 #[inline]
-fn execute_tay(cpu: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_tay(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
     cpu.y = cpu.a;
     cpu.set_zn_flags(cpu.y);
     false
 }
 
 #[inline]
-fn execute_txa(cpu: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_txa(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
     cpu.a = cpu.x;
     cpu.set_zn_flags(cpu.a);
     false
 }
 
 #[inline]
-fn execute_tya(cpu: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_tya(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
     cpu.a = cpu.y;
     cpu.set_zn_flags(cpu.a);
     false
 }
 
 #[inline]
-fn execute_tsx(cpu: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_tsx(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
     cpu.x = cpu.sp;
     cpu.set_zn_flags(cpu.x);
     false
 }
 
 #[inline]
-fn execute_txs(cpu: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_txs(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
     cpu.sp = cpu.x;
     false
 }
 
 #[inline]
-fn execute_pha(cpu: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_pha(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
     cpu.push_word(cpu.a);
     false
 }
 
 #[inline]
-fn execute_php(cpu: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_php(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
     cpu.push_word(Wrapping(
         (cpu.status | StatusFlags::B | StatusFlags::U).bits(),
     ));
@@ -737,14 +958,14 @@ fn execute_php(cpu: &mut Cpu6502, _: InstructionData) -> bool {
 }
 
 #[inline]
-fn execute_pla(cpu: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_pla(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
     cpu.a = cpu.pop_word();
     cpu.set_zn_flags(cpu.a);
     false
 }
 
 #[inline]
-fn execute_plp(cpu: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_plp(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
     unsafe {
         cpu.status = StatusFlags::from_bits_unchecked(cpu.pop_word().0);
     }
@@ -753,27 +974,27 @@ fn execute_plp(cpu: &mut Cpu6502, _: InstructionData) -> bool {
 }
 
 #[inline]
-fn execute_and(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_and(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     cpu.a &= data.read_data(cpu);
     cpu.set_zn_flags(cpu.a);
     false
 }
 
 #[inline]
-fn execute_eor(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_eor(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     cpu.a ^= data.read_data(cpu);
     cpu.set_zn_flags(cpu.a);
     false
 }
 
 #[inline]
-fn execute_ora(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_ora(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     cpu.a |= data.read_data(cpu);
     cpu.set_zn_flags(cpu.a);
     false
 }
 
-fn execute_bit(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_bit(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     let value = data.read_data(cpu);
     cpu.status.set(StatusFlags::Z, (cpu.a & value).0 == 0);
     cpu.status.set(StatusFlags::N, (value.0 & 0x80) != 0);
@@ -804,18 +1025,18 @@ fn execute_adc_sbc(cpu: &mut Cpu6502, right: u16) -> bool {
 }
 
 #[inline]
-fn execute_adc(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_adc(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     let right = data.read_data(cpu).0 as u16;
     execute_adc_sbc(cpu, right)
 }
 
 #[inline]
-fn execute_sbc(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_sbc(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     let right = (!data.read_data(cpu).0) as u16;
     execute_adc_sbc(cpu, right)
 }
 
-fn execute_cmp(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_cmp(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     let value = data.read_data(cpu);
     let tmp = cpu.a - value;
     cpu.status.set(StatusFlags::C, cpu.a >= value);
@@ -823,7 +1044,7 @@ fn execute_cmp(cpu: &mut Cpu6502, data: InstructionData) -> bool {
     false
 }
 
-fn execute_cpx(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_cpx(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     let value = data.read_data(cpu);
     let tmp = cpu.x - value;
     cpu.status.set(StatusFlags::C, cpu.x >= value);
@@ -831,7 +1052,7 @@ fn execute_cpx(cpu: &mut Cpu6502, data: InstructionData) -> bool {
     false
 }
 
-fn execute_cpy(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_cpy(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     let value = data.read_data(cpu);
     let tmp = cpu.y - value;
     cpu.status.set(StatusFlags::C, cpu.y >= value);
@@ -840,8 +1061,8 @@ fn execute_cpy(cpu: &mut Cpu6502, data: InstructionData) -> bool {
 }
 
 #[inline]
-fn execute_inc(cpu: &mut Cpu6502, data: InstructionData) -> bool {
-    if let InstructionData::None = data {
+fn execute_inc(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
+    if let ExecutionData::None = data {
         // If no address is provided the operation is applied to the accumulator
         cpu.a += Wrapping(1);
         cpu.set_zn_flags(cpu.a);
@@ -855,22 +1076,22 @@ fn execute_inc(cpu: &mut Cpu6502, data: InstructionData) -> bool {
 }
 
 #[inline]
-fn execute_inx(cpu: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_inx(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
     cpu.x += Wrapping(1);
     cpu.set_zn_flags(cpu.x);
     false
 }
 
 #[inline]
-fn execute_iny(cpu: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_iny(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
     cpu.y += Wrapping(1);
     cpu.set_zn_flags(cpu.y);
     false
 }
 
 #[inline]
-fn execute_dec(cpu: &mut Cpu6502, data: InstructionData) -> bool {
-    if let InstructionData::None = data {
+fn execute_dec(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
+    if let ExecutionData::None = data {
         // If no address is provided the operation is applied to the accumulator
         cpu.a -= Wrapping(1);
         cpu.set_zn_flags(cpu.a);
@@ -884,21 +1105,21 @@ fn execute_dec(cpu: &mut Cpu6502, data: InstructionData) -> bool {
 }
 
 #[inline]
-fn execute_dex(cpu: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_dex(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
     cpu.x -= Wrapping(1);
     cpu.set_zn_flags(cpu.x);
     false
 }
 
 #[inline]
-fn execute_dey(cpu: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_dey(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
     cpu.y -= Wrapping(1);
     cpu.set_zn_flags(cpu.y);
     false
 }
 
-fn execute_asl(cpu: &mut Cpu6502, data: InstructionData) -> bool {
-    if let InstructionData::None = data {
+fn execute_asl(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
+    if let ExecutionData::None = data {
         // If no address is provided the operation is applied to the accumulator
         cpu.status.set(StatusFlags::C, (cpu.a.0 & 0x80) != 0);
         cpu.a <<= 1;
@@ -915,8 +1136,8 @@ fn execute_asl(cpu: &mut Cpu6502, data: InstructionData) -> bool {
     false
 }
 
-fn execute_lsr(cpu: &mut Cpu6502, data: InstructionData) -> bool {
-    if let InstructionData::None = data {
+fn execute_lsr(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
+    if let ExecutionData::None = data {
         // If no address is provided the operation is applied to the accumulator
         cpu.status.set(StatusFlags::C, (cpu.a.0 & 0x01) != 0);
         cpu.a >>= 1;
@@ -933,8 +1154,8 @@ fn execute_lsr(cpu: &mut Cpu6502, data: InstructionData) -> bool {
     false
 }
 
-fn execute_rol(cpu: &mut Cpu6502, data: InstructionData) -> bool {
-    if let InstructionData::None = data {
+fn execute_rol(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
+    if let ExecutionData::None = data {
         // If no address is provided the operation is applied to the accumulator
         let tmp = ((cpu.a.0 as u16) << 1)
             | if cpu.status.contains(StatusFlags::C) {
@@ -963,8 +1184,8 @@ fn execute_rol(cpu: &mut Cpu6502, data: InstructionData) -> bool {
     false
 }
 
-fn execute_ror(cpu: &mut Cpu6502, data: InstructionData) -> bool {
-    if let InstructionData::None = data {
+fn execute_ror(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
+    if let ExecutionData::None = data {
         // If no address is provided the operation is applied to the accumulator
         let tmp = (cpu.a >> 1)
             | if cpu.status.contains(StatusFlags::C) {
@@ -992,13 +1213,13 @@ fn execute_ror(cpu: &mut Cpu6502, data: InstructionData) -> bool {
 }
 
 #[inline]
-fn execute_jmp(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_jmp(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     cpu.pc = data.read_address();
     false
 }
 
 #[inline]
-fn execute_jsr(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_jsr(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     cpu.pc -= Wrapping(1);
     cpu.push_address(cpu.pc);
     cpu.pc = data.read_address();
@@ -1006,13 +1227,13 @@ fn execute_jsr(cpu: &mut Cpu6502, data: InstructionData) -> bool {
 }
 
 #[inline]
-fn execute_rts(cpu: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_rts(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
     cpu.pc = cpu.pop_address() + Wrapping(1);
     false
 }
 
 #[inline]
-fn execute_bcc(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_bcc(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     if !cpu.status.contains(StatusFlags::C) {
         cpu.pc = data.read_address();
         true
@@ -1022,7 +1243,7 @@ fn execute_bcc(cpu: &mut Cpu6502, data: InstructionData) -> bool {
 }
 
 #[inline]
-fn execute_bcs(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_bcs(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     if cpu.status.contains(StatusFlags::C) {
         cpu.pc = data.read_address();
         true
@@ -1032,7 +1253,7 @@ fn execute_bcs(cpu: &mut Cpu6502, data: InstructionData) -> bool {
 }
 
 #[inline]
-fn execute_beq(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_beq(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     if cpu.status.contains(StatusFlags::Z) {
         cpu.pc = data.read_address();
         true
@@ -1042,7 +1263,7 @@ fn execute_beq(cpu: &mut Cpu6502, data: InstructionData) -> bool {
 }
 
 #[inline]
-fn execute_bmi(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_bmi(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     if cpu.status.contains(StatusFlags::N) {
         cpu.pc = data.read_address();
         true
@@ -1052,7 +1273,7 @@ fn execute_bmi(cpu: &mut Cpu6502, data: InstructionData) -> bool {
 }
 
 #[inline]
-fn execute_bne(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_bne(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     if !cpu.status.contains(StatusFlags::Z) {
         cpu.pc = data.read_address();
         true
@@ -1062,7 +1283,7 @@ fn execute_bne(cpu: &mut Cpu6502, data: InstructionData) -> bool {
 }
 
 #[inline]
-fn execute_bpl(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_bpl(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     if !cpu.status.contains(StatusFlags::N) {
         cpu.pc = data.read_address();
         true
@@ -1072,7 +1293,7 @@ fn execute_bpl(cpu: &mut Cpu6502, data: InstructionData) -> bool {
 }
 
 #[inline]
-fn execute_bvc(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_bvc(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     if !cpu.status.contains(StatusFlags::V) {
         cpu.pc = data.read_address();
         true
@@ -1082,7 +1303,7 @@ fn execute_bvc(cpu: &mut Cpu6502, data: InstructionData) -> bool {
 }
 
 #[inline]
-fn execute_bvs(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_bvs(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     if cpu.status.contains(StatusFlags::V) {
         cpu.pc = data.read_address();
         true
@@ -1092,49 +1313,49 @@ fn execute_bvs(cpu: &mut Cpu6502, data: InstructionData) -> bool {
 }
 
 #[inline]
-fn execute_clc(cpu: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_clc(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
     cpu.status.remove(StatusFlags::C);
     false
 }
 
 #[inline]
-fn execute_cld(cpu: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_cld(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
     cpu.status.remove(StatusFlags::D);
     false
 }
 
 #[inline]
-fn execute_cli(cpu: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_cli(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
     cpu.status.remove(StatusFlags::I);
     false
 }
 
 #[inline]
-fn execute_clv(cpu: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_clv(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
     cpu.status.remove(StatusFlags::V);
     false
 }
 
 #[inline]
-fn execute_sec(cpu: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_sec(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
     cpu.status.insert(StatusFlags::C);
     false
 }
 
 #[inline]
-fn execute_sed(cpu: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_sed(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
     cpu.status.insert(StatusFlags::D);
     false
 }
 
 #[inline]
-fn execute_sei(cpu: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_sei(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
     cpu.status.insert(StatusFlags::I);
     false
 }
 
 #[inline]
-fn execute_brk(cpu: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_brk(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
     cpu.pc += Wrapping(1);
     cpu.push_address(cpu.pc);
 
@@ -1147,12 +1368,12 @@ fn execute_brk(cpu: &mut Cpu6502, _: InstructionData) -> bool {
 }
 
 #[inline]
-fn execute_nop(_: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_nop(_: &mut Cpu6502, _: ExecutionData) -> bool {
     false
 }
 
 #[inline]
-fn execute_rti(cpu: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_rti(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
     unsafe {
         cpu.status = StatusFlags::from_bits_unchecked(cpu.pop_word().0);
     }
@@ -1161,7 +1382,7 @@ fn execute_rti(cpu: &mut Cpu6502, _: InstructionData) -> bool {
     false
 }
 
-fn execute_slo(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_slo(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     let value = data.read_data(cpu);
     cpu.status.set(StatusFlags::C, (value.0 & 0x80) != 0);
 
@@ -1175,14 +1396,14 @@ fn execute_slo(cpu: &mut Cpu6502, data: InstructionData) -> bool {
 }
 
 #[inline]
-fn execute_anc(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_anc(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     cpu.status.set(StatusFlags::C, (cpu.a.0 & 0x80) != 0);
     cpu.a &= data.read_data(cpu);
     cpu.set_zn_flags(cpu.a);
     false
 }
 
-fn execute_rla(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_rla(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     let value = data.read_data(cpu);
     let tmp = ((value.0 as u16) << 1)
         | if cpu.status.contains(StatusFlags::C) {
@@ -1201,7 +1422,7 @@ fn execute_rla(cpu: &mut Cpu6502, data: InstructionData) -> bool {
     false
 }
 
-fn execute_sre(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_sre(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     let value = data.read_data(cpu);
     cpu.status.set(StatusFlags::C, (value.0 & 0x01) != 0);
 
@@ -1215,7 +1436,7 @@ fn execute_sre(cpu: &mut Cpu6502, data: InstructionData) -> bool {
 }
 
 #[inline]
-fn execute_alr(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_alr(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     cpu.a &= data.read_data(cpu);
     cpu.status.set(StatusFlags::C, (cpu.a.0 & 0x01) != 0);
     cpu.a >>= 1;
@@ -1223,7 +1444,7 @@ fn execute_alr(cpu: &mut Cpu6502, data: InstructionData) -> bool {
     false
 }
 
-fn execute_rra(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_rra(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     let value = data.read_data(cpu);
     let tmp = (value >> 1)
         | if cpu.status.contains(StatusFlags::C) {
@@ -1238,7 +1459,7 @@ fn execute_rra(cpu: &mut Cpu6502, data: InstructionData) -> bool {
     execute_adc_sbc(cpu, right)
 }
 
-fn execute_arr(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_arr(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     cpu.a &= data.read_data(cpu);
     let tmp = (cpu.a >> 1)
         | if cpu.status.contains(StatusFlags::C) {
@@ -1252,45 +1473,45 @@ fn execute_arr(cpu: &mut Cpu6502, data: InstructionData) -> bool {
 }
 
 #[inline]
-fn execute_sax(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_sax(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     data.write_data(cpu, cpu.a & cpu.x);
     false
 }
 
 #[inline]
-fn execute_xaa(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_xaa(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     cpu.a = cpu.a & cpu.x & data.read_data(cpu);
     cpu.set_zn_flags(cpu.a);
     false
 }
 
 #[inline]
-fn execute_ahx(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_ahx(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     data.write_data(cpu, cpu.a & cpu.x & data.read_data(cpu));
     false
 }
 
 #[inline]
-fn execute_tas(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_tas(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     cpu.sp = cpu.a & cpu.x;
     data.write_data(cpu, cpu.a & cpu.x & data.read_data(cpu));
     false
 }
 
 #[inline]
-fn execute_shy(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_shy(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     data.write_data(cpu, cpu.y & data.read_data(cpu));
     false
 }
 
 #[inline]
-fn execute_shx(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_shx(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     data.write_data(cpu, cpu.x & data.read_data(cpu));
     false
 }
 
 #[inline]
-fn execute_lax(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_lax(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     cpu.a = data.read_data(cpu);
     cpu.x = cpu.a;
     cpu.set_zn_flags(cpu.a);
@@ -1298,7 +1519,7 @@ fn execute_lax(cpu: &mut Cpu6502, data: InstructionData) -> bool {
 }
 
 #[inline]
-fn execute_las(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_las(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     cpu.a = data.read_data(cpu) & cpu.sp;
     cpu.x = cpu.a;
     cpu.sp = cpu.a;
@@ -1306,7 +1527,7 @@ fn execute_las(cpu: &mut Cpu6502, data: InstructionData) -> bool {
     false
 }
 
-fn execute_dcp(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_dcp(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     let value = data.read_data(cpu) - Wrapping(1);
     data.write_data(cpu, value);
 
@@ -1318,7 +1539,7 @@ fn execute_dcp(cpu: &mut Cpu6502, data: InstructionData) -> bool {
 }
 
 #[inline]
-fn execute_axs(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_axs(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     let value = data.read_data(cpu);
     let tmp = (cpu.a & cpu.x) - value;
     cpu.status.set(StatusFlags::C, (cpu.a & cpu.x) >= value);
@@ -1328,7 +1549,7 @@ fn execute_axs(cpu: &mut Cpu6502, data: InstructionData) -> bool {
 }
 
 #[inline]
-fn execute_isc(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_isc(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     let value = data.read_data(cpu) + Wrapping(1);
     data.write_data(cpu, value);
 
@@ -1337,7 +1558,7 @@ fn execute_isc(cpu: &mut Cpu6502, data: InstructionData) -> bool {
 }
 
 #[inline]
-fn execute_hlt(_: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_hlt(_: &mut Cpu6502, _: ExecutionData) -> bool {
     panic!("Invalid instruction")
 }
 
@@ -1346,45 +1567,45 @@ fn execute_hlt(_: &mut Cpu6502, _: InstructionData) -> bool {
 */
 
 #[inline]
-fn execute_bra(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_bra(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     cpu.pc = data.read_address();
     true
 }
 
 #[inline]
-fn execute_phx(cpu: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_phx(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
     cpu.push_word(cpu.x);
     false
 }
 
 #[inline]
-fn execute_phy(cpu: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_phy(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
     cpu.push_word(cpu.y);
     false
 }
 
 #[inline]
-fn execute_plx(cpu: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_plx(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
     cpu.x = cpu.pop_word();
     cpu.set_zn_flags(cpu.x);
     false
 }
 
 #[inline]
-fn execute_ply(cpu: &mut Cpu6502, _: InstructionData) -> bool {
+fn execute_ply(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
     cpu.y = cpu.pop_word();
     cpu.set_zn_flags(cpu.y);
     false
 }
 
 #[inline]
-fn execute_stz(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_stz(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     data.write_data(cpu, Wrapping(0));
     false
 }
 
 #[inline]
-fn execute_trb(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_trb(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     let mut value = data.read_data(cpu).0;
     value &= !cpu.a.0;
     cpu.status.set(StatusFlags::Z, value == 0);
@@ -1394,7 +1615,7 @@ fn execute_trb(cpu: &mut Cpu6502, data: InstructionData) -> bool {
 }
 
 #[inline]
-fn execute_tsb(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_tsb(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     let mut value = data.read_data(cpu).0;
     value |= cpu.a.0;
     cpu.status.set(StatusFlags::Z, value == 0);
@@ -1404,7 +1625,7 @@ fn execute_tsb(cpu: &mut Cpu6502, data: InstructionData) -> bool {
 }
 
 #[inline]
-fn execute_bbrn(cpu: &mut Cpu6502, data: InstructionData, n: usize) -> bool {
+fn execute_bbrn(cpu: &mut Cpu6502, data: ExecutionData, n: usize) -> bool {
     let value = data.read_data(cpu).0;
 
     if (value & (0x01 << n)) == 0 {
@@ -1416,7 +1637,7 @@ fn execute_bbrn(cpu: &mut Cpu6502, data: InstructionData, n: usize) -> bool {
 }
 
 #[inline]
-fn execute_bbsn(cpu: &mut Cpu6502, data: InstructionData, n: usize) -> bool {
+fn execute_bbsn(cpu: &mut Cpu6502, data: ExecutionData, n: usize) -> bool {
     let value = data.read_data(cpu).0;
 
     if (value & (0x01 << n)) != 0 {
@@ -1428,7 +1649,7 @@ fn execute_bbsn(cpu: &mut Cpu6502, data: InstructionData, n: usize) -> bool {
 }
 
 #[inline]
-fn execute_rmbn(cpu: &mut Cpu6502, data: InstructionData, n: usize) -> bool {
+fn execute_rmbn(cpu: &mut Cpu6502, data: ExecutionData, n: usize) -> bool {
     let mut value = data.read_data(cpu).0;
     value &= !(0x01 << n);
     cpu.status.set(StatusFlags::Z, value == 0);
@@ -1438,7 +1659,7 @@ fn execute_rmbn(cpu: &mut Cpu6502, data: InstructionData, n: usize) -> bool {
 }
 
 #[inline]
-fn execute_smbn(cpu: &mut Cpu6502, data: InstructionData, n: usize) -> bool {
+fn execute_smbn(cpu: &mut Cpu6502, data: ExecutionData, n: usize) -> bool {
     let mut value = data.read_data(cpu).0;
     value |= 0x01 << n;
     cpu.status.set(StatusFlags::Z, value == 0);
@@ -1448,138 +1669,138 @@ fn execute_smbn(cpu: &mut Cpu6502, data: InstructionData, n: usize) -> bool {
 }
 
 #[inline]
-fn execute_bbr0(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_bbr0(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_bbrn(cpu, data, 0)
 }
 #[inline]
-fn execute_bbr1(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_bbr1(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_bbrn(cpu, data, 1)
 }
 #[inline]
-fn execute_bbr2(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_bbr2(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_bbrn(cpu, data, 2)
 }
 #[inline]
-fn execute_bbr3(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_bbr3(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_bbrn(cpu, data, 3)
 }
 #[inline]
-fn execute_bbr4(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_bbr4(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_bbrn(cpu, data, 4)
 }
 #[inline]
-fn execute_bbr5(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_bbr5(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_bbrn(cpu, data, 5)
 }
 #[inline]
-fn execute_bbr6(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_bbr6(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_bbrn(cpu, data, 6)
 }
 #[inline]
-fn execute_bbr7(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_bbr7(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_bbrn(cpu, data, 7)
 }
 
 #[inline]
-fn execute_bbs0(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_bbs0(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_bbsn(cpu, data, 0)
 }
 #[inline]
-fn execute_bbs1(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_bbs1(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_bbsn(cpu, data, 1)
 }
 #[inline]
-fn execute_bbs2(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_bbs2(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_bbsn(cpu, data, 2)
 }
 #[inline]
-fn execute_bbs3(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_bbs3(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_bbsn(cpu, data, 3)
 }
 #[inline]
-fn execute_bbs4(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_bbs4(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_bbsn(cpu, data, 4)
 }
 #[inline]
-fn execute_bbs5(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_bbs5(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_bbsn(cpu, data, 5)
 }
 #[inline]
-fn execute_bbs6(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_bbs6(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_bbsn(cpu, data, 6)
 }
 #[inline]
-fn execute_bbs7(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_bbs7(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_bbsn(cpu, data, 7)
 }
 
 #[inline]
-fn execute_rmb0(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_rmb0(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_rmbn(cpu, data, 0)
 }
 #[inline]
-fn execute_rmb1(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_rmb1(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_rmbn(cpu, data, 1)
 }
 #[inline]
-fn execute_rmb2(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_rmb2(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_rmbn(cpu, data, 2)
 }
 #[inline]
-fn execute_rmb3(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_rmb3(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_rmbn(cpu, data, 3)
 }
 #[inline]
-fn execute_rmb4(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_rmb4(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_rmbn(cpu, data, 4)
 }
 #[inline]
-fn execute_rmb5(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_rmb5(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_rmbn(cpu, data, 5)
 }
 #[inline]
-fn execute_rmb6(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_rmb6(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_rmbn(cpu, data, 6)
 }
 #[inline]
-fn execute_rmb7(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_rmb7(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_rmbn(cpu, data, 7)
 }
 
 #[inline]
-fn execute_smb0(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_smb0(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_smbn(cpu, data, 0)
 }
 #[inline]
-fn execute_smb1(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_smb1(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_smbn(cpu, data, 1)
 }
 #[inline]
-fn execute_smb2(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_smb2(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_smbn(cpu, data, 2)
 }
 #[inline]
-fn execute_smb3(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_smb3(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_smbn(cpu, data, 3)
 }
 #[inline]
-fn execute_smb4(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_smb4(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_smbn(cpu, data, 4)
 }
 #[inline]
-fn execute_smb5(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_smb5(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_smbn(cpu, data, 5)
 }
 #[inline]
-fn execute_smb6(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_smb6(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_smbn(cpu, data, 6)
 }
 #[inline]
-fn execute_smb7(cpu: &mut Cpu6502, data: InstructionData) -> bool {
+fn execute_smb7(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
     execute_smbn(cpu, data, 7)
 }
 
-const EXECUTE_LOOKUP: [fn(&mut Cpu6502, InstructionData) -> bool; 115] = [
+const EXECUTE_LOOKUP: [fn(&mut Cpu6502, ExecutionData) -> bool; 115] = [
     execute_lda, // LDA
     execute_ldx, // LDX
     execute_ldy, // LDY

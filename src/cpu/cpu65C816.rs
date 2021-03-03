@@ -91,7 +91,6 @@ pub enum BaseInstruction {}
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub struct Instruction(BaseInstruction, AddressingMode, u32, bool);
-impl CpuInstruction for Instruction {}
 
 pub struct Cpu65C816<'a> {
     /// Accumulator
