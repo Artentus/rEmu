@@ -515,9 +515,11 @@ pub struct Cpu6502<'a> {
 
     bus: EmuRef<Bus<'a, Address, Word>>,
     emulate_indirect_jmp_bug: bool,
+    emulate_invalid_decimal_flags: bool,
+    enable_decimal_mode: bool,
 }
 impl<'a> Cpu6502<'a> {
-    pub const fn new(bus: EmuRef<Bus<'a, Address, Word>>) -> Self {
+    pub const fn new(bus: EmuRef<Bus<'a, Address, Word>>, enable_decimal_mode: bool) -> Self {
         Self {
             a: Wrapping(0),
             x: Wrapping(0),
@@ -527,12 +529,14 @@ impl<'a> Cpu6502<'a> {
             status: StatusFlags::empty(),
             bus,
             emulate_indirect_jmp_bug: true,
+            emulate_invalid_decimal_flags: true,
+            enable_decimal_mode,
         }
     }
 
     #[inline]
-    pub fn create(bus: EmuRef<Bus<'a, Address, Word>>) -> EmuRef<Self> {
-        make_ref(Self::new(bus))
+    pub fn create(bus: EmuRef<Bus<'a, Address, Word>>, enable_decimal_mode: bool) -> EmuRef<Self> {
+        make_ref(Self::new(bus, enable_decimal_mode))
     }
 
     fn read_next_word(&mut self) -> Word {
@@ -915,15 +919,16 @@ pub struct Cpu65C02<'a> {
 }
 impl<'a> Cpu65C02<'a> {
     #[inline]
-    pub const fn new(bus: EmuRef<Bus<'a, Address, Word>>) -> Self {
-        let mut base_cpu = Cpu6502::new(bus);
+    pub const fn new(bus: EmuRef<Bus<'a, Address, Word>>, enable_decimal_mode: bool) -> Self {
+        let mut base_cpu = Cpu6502::new(bus, enable_decimal_mode);
         base_cpu.emulate_indirect_jmp_bug = false; // Fixed
+        base_cpu.emulate_invalid_decimal_flags = false;
         Self { base_cpu }
     }
 
     #[inline]
-    pub fn create(bus: EmuRef<Bus<'a, Address, Word>>) -> EmuRef<Self> {
-        make_ref(Self::new(bus))
+    pub fn create(bus: EmuRef<Bus<'a, Address, Word>>, enable_decimal_mode: bool) -> EmuRef<Self> {
+        make_ref(Self::new(bus, enable_decimal_mode))
     }
 
     #[inline]
@@ -1666,6 +1671,83 @@ impl<'a> Cpu6502<'a> {
         false
     }
 
+    fn execute_adc_decimal(&mut self, right: u16) -> bool {
+        let left = self.a.0 as u16;
+        let carry: u16 = if self.status.contains(StatusFlags::C) {
+            1
+        } else {
+            0
+        };
+
+        let ld0 = left & 0x0F;
+        let rd0 = right & 0x0F;
+        let ld1 = left & 0xF0;
+        let rd1 = right & 0xF0;
+
+        let mut result = ld0 + rd0 + carry;
+        if result >= 0x000A {
+            result += 0x0006
+        }
+        result += ld1 + rd1;
+        let invalid_n = (result & 0x0080) != 0;
+        let is_overflow = ((!(left ^ right) & (left ^ result)) & 0x0080) != 0;
+        if result >= 0x00A0 {
+            result += 0x0060
+        }
+
+        self.a = Wrapping((result & 0x00FF) as u8);
+        self.status.set(StatusFlags::C, result >= 0x0100);
+        self.status.set(StatusFlags::V, is_overflow);
+
+        if self.emulate_invalid_decimal_flags {
+            self.status
+                .set(StatusFlags::Z, ((left + right + carry) & 0x00FF) == 0);
+            self.status.set(StatusFlags::N, invalid_n);
+        } else {
+            self.set_zn_flags(self.a);
+        }
+
+        false
+    }
+
+    fn execute_sbc_decimal(&mut self, right: u16) -> bool {
+        let left = self.a.0 as u16;
+        let carry: i16 = if self.status.contains(StatusFlags::C) {
+            1
+        } else {
+            0
+        };
+
+        let ld0 = (left & 0x0F) as i16;
+        let rd0 = (right & 0x0F) as i16;
+        let ld1 = (left & 0xF0) as i16;
+        let rd1 = (right & 0xF0) as i16;
+
+        let mut result = ld0 - rd0 + carry - 1;
+        if result < 0 {
+            result = ((result - 0x0006) & 0x000F) - 0x0010
+        }
+        result = ld1 - rd1 + result;
+        if result < 0 {
+            result -= 0x0060
+        }
+
+        self.a = Wrapping((result & 0x00FF) as u8);
+
+        let bin_result = left + right + (carry as u16);
+        let is_overflow = ((!(left ^ right) & (left ^ bin_result)) & 0x0080) != 0;
+        self.status.set(StatusFlags::C, (bin_result & 0xFF00) != 0);
+        self.status.set(StatusFlags::V, is_overflow);
+
+        if self.emulate_invalid_decimal_flags {
+            self.set_zn_flags(Wrapping((bin_result & 0x00FF) as u8));
+        } else {
+            self.set_zn_flags(self.a);
+        }
+
+        false
+    }
+
     fn execute_adc_sbc(&mut self, right: u16) -> bool {
         let left = self.a.0 as u16;
         let carry: u16 = if self.status.contains(StatusFlags::C) {
@@ -1673,31 +1755,35 @@ impl<'a> Cpu6502<'a> {
         } else {
             0
         };
-        let result = left + right + carry;
 
-        let is_overflow = if ((!(left ^ right) & (left ^ result)) & 0x0080) != 0 {
-            true
-        } else {
-            false
-        };
+        let result = left + right + carry;
+        let is_overflow = ((!(left ^ right) & (left ^ result)) & 0x0080) != 0;
 
         self.a = Wrapping((result & 0x00FF) as u8);
         self.status.set(StatusFlags::C, (result & 0xFF00) != 0);
         self.status.set(StatusFlags::V, is_overflow);
         self.set_zn_flags(self.a);
+
         false
     }
 
-    #[inline]
     fn execute_adc(&mut self, data: ExecutionData) -> bool {
         let right = data.read_data(self).0 as u16;
-        self.execute_adc_sbc(right)
+        if self.enable_decimal_mode && self.status.contains(StatusFlags::D) {
+            self.execute_adc_decimal(right)
+        } else {
+            self.execute_adc_sbc(right)
+        }
     }
 
-    #[inline]
     fn execute_sbc(&mut self, data: ExecutionData) -> bool {
-        let right = (!data.read_data(self).0) as u16;
-        self.execute_adc_sbc(right)
+        if self.enable_decimal_mode &&self.status.contains(StatusFlags::D) {
+            let right = data.read_data(self).0 as u16;
+            self.execute_sbc_decimal(right)
+        } else {
+            let right = (!data.read_data(self).0) as u16;
+            self.execute_adc_sbc(right)
+        }
     }
 
     fn execute_cmp(&mut self, data: ExecutionData) -> bool {

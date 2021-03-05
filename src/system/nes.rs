@@ -111,7 +111,7 @@ impl<'a> Nes<'a> {
         }
         /* End CPU bus */
 
-        let cpu = Cpu6502::new(clone_ref(&cpu_bus));
+        let cpu = Cpu6502::new(clone_ref(&cpu_bus), false);
 
         Self {
             cpu,
