@@ -14,10 +14,10 @@ where
     fn mnemonic(&self) -> &str;
 }
 
-pub trait Cpu<TAddress, TWord, TInstruction>: Display
+pub trait Cpu<TAddress, TBusWord, TInstruction>: Display
 where
     TAddress: HardwareInteger,
-    TWord: HardwareInteger,
+    TBusWord: HardwareInteger,
     TInstruction: AsmInstruction<TAddress>,
 {
     fn reset(&mut self) -> u32;

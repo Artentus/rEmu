@@ -634,8 +634,123 @@ impl<'a> Cpu6502<'a> {
         let instruction_data = addressing_mode.read_next(self);
         let (execution_data, page_crossed) = instruction_data.to_execution_data(self);
 
-        let execute = EXECUTE_LOOKUP[base_instruction as usize];
-        let branch_taken = execute(self, execution_data);
+        let branch_taken = match base_instruction {
+            BaseInstruction::LDA => self.execute_lda(execution_data),
+            BaseInstruction::LDX => self.execute_ldx(execution_data),
+            BaseInstruction::LDY => self.execute_ldy(execution_data),
+            BaseInstruction::STA => self.execute_sta(execution_data),
+            BaseInstruction::STX => self.execute_stx(execution_data),
+            BaseInstruction::STY => self.execute_sty(execution_data),
+            BaseInstruction::TAX => self.execute_tax(),
+            BaseInstruction::TAY => self.execute_tay(),
+            BaseInstruction::TXA => self.execute_txa(),
+            BaseInstruction::TYA => self.execute_tya(),
+            BaseInstruction::TSX => self.execute_tsx(),
+            BaseInstruction::TXS => self.execute_txs(),
+            BaseInstruction::PHA => self.execute_pha(),
+            BaseInstruction::PHP => self.execute_php(),
+            BaseInstruction::PLA => self.execute_pla(),
+            BaseInstruction::PLP => self.execute_plp(),
+            BaseInstruction::AND => self.execute_and(execution_data),
+            BaseInstruction::EOR => self.execute_eor(execution_data),
+            BaseInstruction::ORA => self.execute_ora(execution_data),
+            BaseInstruction::BIT => self.execute_bit(execution_data),
+            BaseInstruction::ADC => self.execute_adc(execution_data),
+            BaseInstruction::SBC => self.execute_sbc(execution_data),
+            BaseInstruction::CMP => self.execute_cmp(execution_data),
+            BaseInstruction::CPX => self.execute_cpx(execution_data),
+            BaseInstruction::CPY => self.execute_cpy(execution_data),
+            BaseInstruction::INC => self.execute_inc(execution_data),
+            BaseInstruction::INX => self.execute_inx(),
+            BaseInstruction::INY => self.execute_iny(),
+            BaseInstruction::DEC => self.execute_dec(execution_data),
+            BaseInstruction::DEX => self.execute_dex(),
+            BaseInstruction::DEY => self.execute_dey(),
+            BaseInstruction::ASL => self.execute_asl(execution_data),
+            BaseInstruction::LSR => self.execute_lsr(execution_data),
+            BaseInstruction::ROL => self.execute_rol(execution_data),
+            BaseInstruction::ROR => self.execute_ror(execution_data),
+            BaseInstruction::JMP => self.execute_jmp(execution_data),
+            BaseInstruction::JSR => self.execute_jsr(execution_data),
+            BaseInstruction::RTS => self.execute_rts(execution_data),
+            BaseInstruction::BCC => self.execute_bcc(execution_data),
+            BaseInstruction::BCS => self.execute_bcs(execution_data),
+            BaseInstruction::BEQ => self.execute_beq(execution_data),
+            BaseInstruction::BMI => self.execute_bmi(execution_data),
+            BaseInstruction::BNE => self.execute_bne(execution_data),
+            BaseInstruction::BPL => self.execute_bpl(execution_data),
+            BaseInstruction::BVC => self.execute_bvc(execution_data),
+            BaseInstruction::BVS => self.execute_bvs(execution_data),
+            BaseInstruction::CLC => self.execute_clc(),
+            BaseInstruction::CLD => self.execute_cld(),
+            BaseInstruction::CLI => self.execute_cli(),
+            BaseInstruction::CLV => self.execute_clv(),
+            BaseInstruction::SEC => self.execute_sec(),
+            BaseInstruction::SED => self.execute_sed(),
+            BaseInstruction::SEI => self.execute_sei(),
+            BaseInstruction::BRK => self.execute_brk(),
+            BaseInstruction::NOP => false,
+            BaseInstruction::RTI => self.execute_rti(),
+            BaseInstruction::SLO => self.execute_slo(execution_data),
+            BaseInstruction::ANC => self.execute_anc(execution_data),
+            BaseInstruction::RLA => self.execute_rla(execution_data),
+            BaseInstruction::SRE => self.execute_sre(execution_data),
+            BaseInstruction::ALR => self.execute_alr(execution_data),
+            BaseInstruction::RRA => self.execute_rra(execution_data),
+            BaseInstruction::ARR => self.execute_arr(execution_data),
+            BaseInstruction::SAX => self.execute_sax(execution_data),
+            BaseInstruction::XAA => self.execute_xaa(execution_data),
+            BaseInstruction::AHX => self.execute_ahx(execution_data),
+            BaseInstruction::TAS => self.execute_tas(execution_data),
+            BaseInstruction::SHY => self.execute_shy(execution_data),
+            BaseInstruction::SHX => self.execute_shx(execution_data),
+            BaseInstruction::LAX => self.execute_lax(execution_data),
+            BaseInstruction::LAS => self.execute_las(execution_data),
+            BaseInstruction::DCP => self.execute_dcp(execution_data),
+            BaseInstruction::AXS => self.execute_axs(execution_data),
+            BaseInstruction::ISC => self.execute_isc(execution_data),
+            BaseInstruction::HLT => panic!("Invalid instruction"),
+            BaseInstruction::BRA => self.execute_bra(execution_data),
+            BaseInstruction::PHX => self.execute_phx(),
+            BaseInstruction::PHY => self.execute_phy(),
+            BaseInstruction::PLX => self.execute_plx(),
+            BaseInstruction::PLY => self.execute_ply(),
+            BaseInstruction::STZ => self.execute_stz(execution_data),
+            BaseInstruction::TRB => self.execute_trb(execution_data),
+            BaseInstruction::TSB => self.execute_tsb(execution_data),
+            BaseInstruction::BBR0 => self.execute_bbr(execution_data, 0),
+            BaseInstruction::BBR1 => self.execute_bbr(execution_data, 1),
+            BaseInstruction::BBR2 => self.execute_bbr(execution_data, 2),
+            BaseInstruction::BBR3 => self.execute_bbr(execution_data, 3),
+            BaseInstruction::BBR4 => self.execute_bbr(execution_data, 4),
+            BaseInstruction::BBR5 => self.execute_bbr(execution_data, 5),
+            BaseInstruction::BBR6 => self.execute_bbr(execution_data, 6),
+            BaseInstruction::BBR7 => self.execute_bbr(execution_data, 7),
+            BaseInstruction::BBS0 => self.execute_bbs(execution_data, 0),
+            BaseInstruction::BBS1 => self.execute_bbs(execution_data, 1),
+            BaseInstruction::BBS2 => self.execute_bbs(execution_data, 2),
+            BaseInstruction::BBS3 => self.execute_bbs(execution_data, 3),
+            BaseInstruction::BBS4 => self.execute_bbs(execution_data, 4),
+            BaseInstruction::BBS5 => self.execute_bbs(execution_data, 5),
+            BaseInstruction::BBS6 => self.execute_bbs(execution_data, 6),
+            BaseInstruction::BBS7 => self.execute_bbs(execution_data, 7),
+            BaseInstruction::RMB0 => self.execute_rmb(execution_data, 0),
+            BaseInstruction::RMB1 => self.execute_rmb(execution_data, 1),
+            BaseInstruction::RMB2 => self.execute_rmb(execution_data, 2),
+            BaseInstruction::RMB3 => self.execute_rmb(execution_data, 3),
+            BaseInstruction::RMB4 => self.execute_rmb(execution_data, 4),
+            BaseInstruction::RMB5 => self.execute_rmb(execution_data, 5),
+            BaseInstruction::RMB6 => self.execute_rmb(execution_data, 6),
+            BaseInstruction::RMB7 => self.execute_rmb(execution_data, 7),
+            BaseInstruction::SMB0 => self.execute_smb(execution_data, 0),
+            BaseInstruction::SMB1 => self.execute_smb(execution_data, 1),
+            BaseInstruction::SMB2 => self.execute_smb(execution_data, 2),
+            BaseInstruction::SMB3 => self.execute_smb(execution_data, 3),
+            BaseInstruction::SMB4 => self.execute_smb(execution_data, 4),
+            BaseInstruction::SMB5 => self.execute_smb(execution_data, 5),
+            BaseInstruction::SMB6 => self.execute_smb(execution_data, 6),
+            BaseInstruction::SMB7 => self.execute_smb(execution_data, 7),
+        };
 
         cycles
             + if page_crossed && add_cycle_on_page_cross {
@@ -861,1064 +976,6 @@ impl<'a> Cpu<Address, Word, Asm6502Instruction> for Cpu65C02<'a> {
         result.into_boxed_slice()
     }
 }
-
-#[inline]
-fn execute_lda(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    cpu.a = data.read_data(cpu);
-    cpu.set_zn_flags(cpu.a);
-    false
-}
-
-#[inline]
-fn execute_ldx(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    cpu.x = data.read_data(cpu);
-    cpu.set_zn_flags(cpu.x);
-    false
-}
-
-#[inline]
-fn execute_ldy(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    cpu.y = data.read_data(cpu);
-    cpu.set_zn_flags(cpu.y);
-    false
-}
-
-#[inline]
-fn execute_sta(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    data.write_data(cpu, cpu.a);
-    false
-}
-
-#[inline]
-fn execute_stx(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    data.write_data(cpu, cpu.x);
-    false
-}
-
-#[inline]
-fn execute_sty(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    data.write_data(cpu, cpu.y);
-    false
-}
-
-#[inline]
-fn execute_tax(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
-    cpu.x = cpu.a;
-    cpu.set_zn_flags(cpu.x);
-    false
-}
-
-#[inline]
-fn execute_tay(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
-    cpu.y = cpu.a;
-    cpu.set_zn_flags(cpu.y);
-    false
-}
-
-#[inline]
-fn execute_txa(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
-    cpu.a = cpu.x;
-    cpu.set_zn_flags(cpu.a);
-    false
-}
-
-#[inline]
-fn execute_tya(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
-    cpu.a = cpu.y;
-    cpu.set_zn_flags(cpu.a);
-    false
-}
-
-#[inline]
-fn execute_tsx(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
-    cpu.x = cpu.sp;
-    cpu.set_zn_flags(cpu.x);
-    false
-}
-
-#[inline]
-fn execute_txs(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
-    cpu.sp = cpu.x;
-    false
-}
-
-#[inline]
-fn execute_pha(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
-    cpu.push_word(cpu.a);
-    false
-}
-
-#[inline]
-fn execute_php(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
-    cpu.push_word(Wrapping(
-        (cpu.status | StatusFlags::B | StatusFlags::U).bits(),
-    ));
-    cpu.status.remove(StatusFlags::B | StatusFlags::U);
-    false
-}
-
-#[inline]
-fn execute_pla(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
-    cpu.a = cpu.pop_word();
-    cpu.set_zn_flags(cpu.a);
-    false
-}
-
-#[inline]
-fn execute_plp(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
-    unsafe {
-        cpu.status = StatusFlags::from_bits_unchecked(cpu.pop_word().0);
-    }
-    cpu.status.insert(StatusFlags::U);
-    false
-}
-
-#[inline]
-fn execute_and(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    cpu.a &= data.read_data(cpu);
-    cpu.set_zn_flags(cpu.a);
-    false
-}
-
-#[inline]
-fn execute_eor(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    cpu.a ^= data.read_data(cpu);
-    cpu.set_zn_flags(cpu.a);
-    false
-}
-
-#[inline]
-fn execute_ora(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    cpu.a |= data.read_data(cpu);
-    cpu.set_zn_flags(cpu.a);
-    false
-}
-
-fn execute_bit(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    let value = data.read_data(cpu);
-    cpu.status.set(StatusFlags::Z, (cpu.a & value).0 == 0);
-    cpu.status.set(StatusFlags::N, (value.0 & 0x80) != 0);
-    cpu.status.set(StatusFlags::V, (value.0 & 0x40) != 0);
-    false
-}
-
-fn execute_adc_sbc(cpu: &mut Cpu6502, right: u16) -> bool {
-    let left = cpu.a.0 as u16;
-    let carry: u16 = if cpu.status.contains(StatusFlags::C) {
-        1
-    } else {
-        0
-    };
-    let result = left + right + carry;
-
-    let is_overflow = if ((!(left ^ right) & (left ^ result)) & 0x0080) != 0 {
-        true
-    } else {
-        false
-    };
-
-    cpu.a = Wrapping((result & 0x00FF) as u8);
-    cpu.status.set(StatusFlags::C, (result & 0xFF00) != 0);
-    cpu.status.set(StatusFlags::V, is_overflow);
-    cpu.set_zn_flags(cpu.a);
-    false
-}
-
-#[inline]
-fn execute_adc(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    let right = data.read_data(cpu).0 as u16;
-    execute_adc_sbc(cpu, right)
-}
-
-#[inline]
-fn execute_sbc(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    let right = (!data.read_data(cpu).0) as u16;
-    execute_adc_sbc(cpu, right)
-}
-
-fn execute_cmp(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    let value = data.read_data(cpu);
-    let tmp = cpu.a - value;
-    cpu.status.set(StatusFlags::C, cpu.a >= value);
-    cpu.set_zn_flags(tmp);
-    false
-}
-
-fn execute_cpx(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    let value = data.read_data(cpu);
-    let tmp = cpu.x - value;
-    cpu.status.set(StatusFlags::C, cpu.x >= value);
-    cpu.set_zn_flags(tmp);
-    false
-}
-
-fn execute_cpy(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    let value = data.read_data(cpu);
-    let tmp = cpu.y - value;
-    cpu.status.set(StatusFlags::C, cpu.y >= value);
-    cpu.set_zn_flags(tmp);
-    false
-}
-
-#[inline]
-fn execute_inc(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    if let ExecutionData::None = data {
-        // If no address is provided the operation is applied to the accumulator
-        cpu.a += Wrapping(1);
-        cpu.set_zn_flags(cpu.a);
-    } else {
-        let value = data.read_data(cpu) + Wrapping(1);
-        data.write_data(cpu, value);
-        cpu.set_zn_flags(value);
-    }
-
-    false
-}
-
-#[inline]
-fn execute_inx(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
-    cpu.x += Wrapping(1);
-    cpu.set_zn_flags(cpu.x);
-    false
-}
-
-#[inline]
-fn execute_iny(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
-    cpu.y += Wrapping(1);
-    cpu.set_zn_flags(cpu.y);
-    false
-}
-
-#[inline]
-fn execute_dec(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    if let ExecutionData::None = data {
-        // If no address is provided the operation is applied to the accumulator
-        cpu.a -= Wrapping(1);
-        cpu.set_zn_flags(cpu.a);
-    } else {
-        let value = data.read_data(cpu) - Wrapping(1);
-        data.write_data(cpu, value);
-        cpu.set_zn_flags(value);
-    }
-
-    false
-}
-
-#[inline]
-fn execute_dex(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
-    cpu.x -= Wrapping(1);
-    cpu.set_zn_flags(cpu.x);
-    false
-}
-
-#[inline]
-fn execute_dey(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
-    cpu.y -= Wrapping(1);
-    cpu.set_zn_flags(cpu.y);
-    false
-}
-
-fn execute_asl(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    if let ExecutionData::None = data {
-        // If no address is provided the operation is applied to the accumulator
-        cpu.status.set(StatusFlags::C, (cpu.a.0 & 0x80) != 0);
-        cpu.a <<= 1;
-        cpu.set_zn_flags(cpu.a);
-    } else {
-        let value = data.read_data(cpu);
-        cpu.status.set(StatusFlags::C, (value.0 & 0x80) != 0);
-
-        let tmp = value << 1;
-        cpu.set_zn_flags(tmp);
-        data.write_data(cpu, tmp);
-    }
-
-    false
-}
-
-fn execute_lsr(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    if let ExecutionData::None = data {
-        // If no address is provided the operation is applied to the accumulator
-        cpu.status.set(StatusFlags::C, (cpu.a.0 & 0x01) != 0);
-        cpu.a >>= 1;
-        cpu.set_zn_flags(cpu.a);
-    } else {
-        let value = data.read_data(cpu);
-        cpu.status.set(StatusFlags::C, (value.0 & 0x01) != 0);
-
-        let tmp = value >> 1;
-        cpu.set_zn_flags(tmp);
-        data.write_data(cpu, tmp);
-    }
-
-    false
-}
-
-fn execute_rol(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    if let ExecutionData::None = data {
-        // If no address is provided the operation is applied to the accumulator
-        let tmp = ((cpu.a.0 as u16) << 1)
-            | if cpu.status.contains(StatusFlags::C) {
-                0x0001
-            } else {
-                0x0000
-            };
-        cpu.status.set(StatusFlags::C, (tmp & 0xFF00) != 0);
-        cpu.a = Wrapping((tmp & 0x00FF) as u8);
-        cpu.set_zn_flags(cpu.a);
-    } else {
-        let value = data.read_data(cpu);
-        let tmp = ((value.0 as u16) << 1)
-            | if cpu.status.contains(StatusFlags::C) {
-                0x0001
-            } else {
-                0x0000
-            };
-        cpu.status.set(StatusFlags::C, (tmp & 0xFF00) != 0);
-
-        let new_value = Wrapping((tmp & 0x00FF) as u8);
-        cpu.set_zn_flags(new_value);
-        data.write_data(cpu, new_value);
-    }
-
-    false
-}
-
-fn execute_ror(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    if let ExecutionData::None = data {
-        // If no address is provided the operation is applied to the accumulator
-        let tmp = (cpu.a >> 1)
-            | if cpu.status.contains(StatusFlags::C) {
-                Wrapping(0x80)
-            } else {
-                Wrapping(0x00)
-            };
-        cpu.status.set(StatusFlags::C, (cpu.a.0 & 0x01) != 0);
-        cpu.a = tmp;
-        cpu.set_zn_flags(cpu.a);
-    } else {
-        let value = data.read_data(cpu);
-        let tmp = (value >> 1)
-            | if cpu.status.contains(StatusFlags::C) {
-                Wrapping(0x80)
-            } else {
-                Wrapping(0x00)
-            };
-        cpu.status.set(StatusFlags::C, (value.0 & 0x01) != 0);
-        data.write_data(cpu, tmp);
-        cpu.set_zn_flags(tmp);
-    }
-
-    false
-}
-
-#[inline]
-fn execute_jmp(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    cpu.pc = data.read_address();
-    false
-}
-
-#[inline]
-fn execute_jsr(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    cpu.pc -= Wrapping(1);
-    cpu.push_address(cpu.pc);
-    cpu.pc = data.read_address();
-    false
-}
-
-#[inline]
-fn execute_rts(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
-    cpu.pc = cpu.pop_address() + Wrapping(1);
-    false
-}
-
-#[inline]
-fn execute_bcc(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    if !cpu.status.contains(StatusFlags::C) {
-        cpu.pc = data.read_address();
-        true
-    } else {
-        false
-    }
-}
-
-#[inline]
-fn execute_bcs(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    if cpu.status.contains(StatusFlags::C) {
-        cpu.pc = data.read_address();
-        true
-    } else {
-        false
-    }
-}
-
-#[inline]
-fn execute_beq(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    if cpu.status.contains(StatusFlags::Z) {
-        cpu.pc = data.read_address();
-        true
-    } else {
-        false
-    }
-}
-
-#[inline]
-fn execute_bmi(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    if cpu.status.contains(StatusFlags::N) {
-        cpu.pc = data.read_address();
-        true
-    } else {
-        false
-    }
-}
-
-#[inline]
-fn execute_bne(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    if !cpu.status.contains(StatusFlags::Z) {
-        cpu.pc = data.read_address();
-        true
-    } else {
-        false
-    }
-}
-
-#[inline]
-fn execute_bpl(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    if !cpu.status.contains(StatusFlags::N) {
-        cpu.pc = data.read_address();
-        true
-    } else {
-        false
-    }
-}
-
-#[inline]
-fn execute_bvc(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    if !cpu.status.contains(StatusFlags::V) {
-        cpu.pc = data.read_address();
-        true
-    } else {
-        false
-    }
-}
-
-#[inline]
-fn execute_bvs(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    if cpu.status.contains(StatusFlags::V) {
-        cpu.pc = data.read_address();
-        true
-    } else {
-        false
-    }
-}
-
-#[inline]
-fn execute_clc(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
-    cpu.status.remove(StatusFlags::C);
-    false
-}
-
-#[inline]
-fn execute_cld(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
-    cpu.status.remove(StatusFlags::D);
-    false
-}
-
-#[inline]
-fn execute_cli(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
-    cpu.status.remove(StatusFlags::I);
-    false
-}
-
-#[inline]
-fn execute_clv(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
-    cpu.status.remove(StatusFlags::V);
-    false
-}
-
-#[inline]
-fn execute_sec(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
-    cpu.status.insert(StatusFlags::C);
-    false
-}
-
-#[inline]
-fn execute_sed(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
-    cpu.status.insert(StatusFlags::D);
-    false
-}
-
-#[inline]
-fn execute_sei(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
-    cpu.status.insert(StatusFlags::I);
-    false
-}
-
-#[inline]
-fn execute_brk(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
-    cpu.pc += Wrapping(1);
-    cpu.push_address(cpu.pc);
-
-    cpu.status.insert(StatusFlags::B | StatusFlags::I);
-    cpu.push_word(Wrapping(cpu.status.bits()));
-    cpu.status.remove(StatusFlags::B);
-
-    cpu.pc = cpu.read_address(IRQ_VECTOR);
-    false
-}
-
-#[inline]
-fn execute_nop(_: &mut Cpu6502, _: ExecutionData) -> bool {
-    false
-}
-
-#[inline]
-fn execute_rti(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
-    unsafe {
-        cpu.status = StatusFlags::from_bits_unchecked(cpu.pop_word().0);
-    }
-    cpu.status.remove(StatusFlags::B | StatusFlags::U);
-    cpu.pc = cpu.pop_address();
-    false
-}
-
-fn execute_slo(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    let value = data.read_data(cpu);
-    cpu.status.set(StatusFlags::C, (value.0 & 0x80) != 0);
-
-    let tmp = value << 1;
-    data.write_data(cpu, tmp);
-
-    cpu.a |= tmp;
-    cpu.set_zn_flags(cpu.a);
-
-    false
-}
-
-#[inline]
-fn execute_anc(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    cpu.status.set(StatusFlags::C, (cpu.a.0 & 0x80) != 0);
-    cpu.a &= data.read_data(cpu);
-    cpu.set_zn_flags(cpu.a);
-    false
-}
-
-fn execute_rla(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    let value = data.read_data(cpu);
-    let tmp = ((value.0 as u16) << 1)
-        | if cpu.status.contains(StatusFlags::C) {
-            0x0001
-        } else {
-            0x0000
-        };
-    cpu.status.set(StatusFlags::C, (tmp & 0xFF00) != 0);
-
-    let new_value = Wrapping((tmp & 0x00FF) as u8);
-    data.write_data(cpu, new_value);
-
-    cpu.a &= new_value;
-    cpu.set_zn_flags(cpu.a);
-
-    false
-}
-
-fn execute_sre(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    let value = data.read_data(cpu);
-    cpu.status.set(StatusFlags::C, (value.0 & 0x01) != 0);
-
-    let tmp = value >> 1;
-    data.write_data(cpu, tmp);
-
-    cpu.a ^= tmp;
-    cpu.set_zn_flags(cpu.a);
-
-    false
-}
-
-#[inline]
-fn execute_alr(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    cpu.a &= data.read_data(cpu);
-    cpu.status.set(StatusFlags::C, (cpu.a.0 & 0x01) != 0);
-    cpu.a >>= 1;
-    cpu.set_zn_flags(cpu.a);
-    false
-}
-
-fn execute_rra(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    let value = data.read_data(cpu);
-    let tmp = (value >> 1)
-        | if cpu.status.contains(StatusFlags::C) {
-            Wrapping(0x80)
-        } else {
-            Wrapping(0x00)
-        };
-    cpu.status.set(StatusFlags::C, (value.0 & 0x01) != 0);
-    data.write_data(cpu, tmp);
-
-    let right = tmp.0 as u16;
-    execute_adc_sbc(cpu, right)
-}
-
-fn execute_arr(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    cpu.a &= data.read_data(cpu);
-    let tmp = (cpu.a >> 1)
-        | if cpu.status.contains(StatusFlags::C) {
-            Wrapping(0x80)
-        } else {
-            Wrapping(0x00)
-        };
-    cpu.a = tmp;
-    cpu.set_zn_flags(cpu.a);
-    false
-}
-
-#[inline]
-fn execute_sax(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    data.write_data(cpu, cpu.a & cpu.x);
-    false
-}
-
-#[inline]
-fn execute_xaa(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    cpu.a = cpu.a & cpu.x & data.read_data(cpu);
-    cpu.set_zn_flags(cpu.a);
-    false
-}
-
-#[inline]
-fn execute_ahx(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    data.write_data(cpu, cpu.a & cpu.x & data.read_data(cpu));
-    false
-}
-
-#[inline]
-fn execute_tas(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    cpu.sp = cpu.a & cpu.x;
-    data.write_data(cpu, cpu.a & cpu.x & data.read_data(cpu));
-    false
-}
-
-#[inline]
-fn execute_shy(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    data.write_data(cpu, cpu.y & data.read_data(cpu));
-    false
-}
-
-#[inline]
-fn execute_shx(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    data.write_data(cpu, cpu.x & data.read_data(cpu));
-    false
-}
-
-#[inline]
-fn execute_lax(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    cpu.a = data.read_data(cpu);
-    cpu.x = cpu.a;
-    cpu.set_zn_flags(cpu.a);
-    false
-}
-
-#[inline]
-fn execute_las(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    cpu.a = data.read_data(cpu) & cpu.sp;
-    cpu.x = cpu.a;
-    cpu.sp = cpu.a;
-    cpu.set_zn_flags(cpu.a);
-    false
-}
-
-fn execute_dcp(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    let value = data.read_data(cpu) - Wrapping(1);
-    data.write_data(cpu, value);
-
-    let tmp = cpu.a - value;
-    cpu.status.set(StatusFlags::C, cpu.a >= value);
-    cpu.set_zn_flags(tmp);
-
-    false
-}
-
-#[inline]
-fn execute_axs(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    let value = data.read_data(cpu);
-    let tmp = (cpu.a & cpu.x) - value;
-    cpu.status.set(StatusFlags::C, (cpu.a & cpu.x) >= value);
-    cpu.set_zn_flags(tmp);
-    cpu.x = tmp;
-    false
-}
-
-#[inline]
-fn execute_isc(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    let value = data.read_data(cpu) + Wrapping(1);
-    data.write_data(cpu, value);
-
-    let right = (!value.0) as u16;
-    execute_adc_sbc(cpu, right)
-}
-
-#[inline]
-fn execute_hlt(_: &mut Cpu6502, _: ExecutionData) -> bool {
-    panic!("Invalid instruction")
-}
-
-/*
-    65C02 instructions
-*/
-
-#[inline]
-fn execute_bra(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    cpu.pc = data.read_address();
-    true
-}
-
-#[inline]
-fn execute_phx(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
-    cpu.push_word(cpu.x);
-    false
-}
-
-#[inline]
-fn execute_phy(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
-    cpu.push_word(cpu.y);
-    false
-}
-
-#[inline]
-fn execute_plx(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
-    cpu.x = cpu.pop_word();
-    cpu.set_zn_flags(cpu.x);
-    false
-}
-
-#[inline]
-fn execute_ply(cpu: &mut Cpu6502, _: ExecutionData) -> bool {
-    cpu.y = cpu.pop_word();
-    cpu.set_zn_flags(cpu.y);
-    false
-}
-
-#[inline]
-fn execute_stz(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    data.write_data(cpu, Wrapping(0));
-    false
-}
-
-#[inline]
-fn execute_trb(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    let mut value = data.read_data(cpu).0;
-    value &= !cpu.a.0;
-    cpu.status.set(StatusFlags::Z, value == 0);
-    data.write_data(cpu, Wrapping(value));
-
-    false
-}
-
-#[inline]
-fn execute_tsb(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    let mut value = data.read_data(cpu).0;
-    value |= cpu.a.0;
-    cpu.status.set(StatusFlags::Z, value == 0);
-    data.write_data(cpu, Wrapping(value));
-
-    false
-}
-
-#[inline]
-fn execute_bbrn(cpu: &mut Cpu6502, data: ExecutionData, n: usize) -> bool {
-    let value = data.read_data(cpu).0;
-
-    if (value & (0x01 << n)) == 0 {
-        cpu.pc = data.read_address();
-        true
-    } else {
-        false
-    }
-}
-
-#[inline]
-fn execute_bbsn(cpu: &mut Cpu6502, data: ExecutionData, n: usize) -> bool {
-    let value = data.read_data(cpu).0;
-
-    if (value & (0x01 << n)) != 0 {
-        cpu.pc = data.read_address();
-        true
-    } else {
-        false
-    }
-}
-
-#[inline]
-fn execute_rmbn(cpu: &mut Cpu6502, data: ExecutionData, n: usize) -> bool {
-    let mut value = data.read_data(cpu).0;
-    value &= !(0x01 << n);
-    cpu.status.set(StatusFlags::Z, value == 0);
-    data.write_data(cpu, Wrapping(value));
-
-    false
-}
-
-#[inline]
-fn execute_smbn(cpu: &mut Cpu6502, data: ExecutionData, n: usize) -> bool {
-    let mut value = data.read_data(cpu).0;
-    value |= 0x01 << n;
-    cpu.status.set(StatusFlags::Z, value == 0);
-    data.write_data(cpu, Wrapping(value));
-
-    false
-}
-
-#[inline]
-fn execute_bbr0(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_bbrn(cpu, data, 0)
-}
-#[inline]
-fn execute_bbr1(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_bbrn(cpu, data, 1)
-}
-#[inline]
-fn execute_bbr2(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_bbrn(cpu, data, 2)
-}
-#[inline]
-fn execute_bbr3(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_bbrn(cpu, data, 3)
-}
-#[inline]
-fn execute_bbr4(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_bbrn(cpu, data, 4)
-}
-#[inline]
-fn execute_bbr5(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_bbrn(cpu, data, 5)
-}
-#[inline]
-fn execute_bbr6(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_bbrn(cpu, data, 6)
-}
-#[inline]
-fn execute_bbr7(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_bbrn(cpu, data, 7)
-}
-
-#[inline]
-fn execute_bbs0(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_bbsn(cpu, data, 0)
-}
-#[inline]
-fn execute_bbs1(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_bbsn(cpu, data, 1)
-}
-#[inline]
-fn execute_bbs2(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_bbsn(cpu, data, 2)
-}
-#[inline]
-fn execute_bbs3(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_bbsn(cpu, data, 3)
-}
-#[inline]
-fn execute_bbs4(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_bbsn(cpu, data, 4)
-}
-#[inline]
-fn execute_bbs5(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_bbsn(cpu, data, 5)
-}
-#[inline]
-fn execute_bbs6(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_bbsn(cpu, data, 6)
-}
-#[inline]
-fn execute_bbs7(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_bbsn(cpu, data, 7)
-}
-
-#[inline]
-fn execute_rmb0(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_rmbn(cpu, data, 0)
-}
-#[inline]
-fn execute_rmb1(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_rmbn(cpu, data, 1)
-}
-#[inline]
-fn execute_rmb2(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_rmbn(cpu, data, 2)
-}
-#[inline]
-fn execute_rmb3(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_rmbn(cpu, data, 3)
-}
-#[inline]
-fn execute_rmb4(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_rmbn(cpu, data, 4)
-}
-#[inline]
-fn execute_rmb5(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_rmbn(cpu, data, 5)
-}
-#[inline]
-fn execute_rmb6(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_rmbn(cpu, data, 6)
-}
-#[inline]
-fn execute_rmb7(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_rmbn(cpu, data, 7)
-}
-
-#[inline]
-fn execute_smb0(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_smbn(cpu, data, 0)
-}
-#[inline]
-fn execute_smb1(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_smbn(cpu, data, 1)
-}
-#[inline]
-fn execute_smb2(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_smbn(cpu, data, 2)
-}
-#[inline]
-fn execute_smb3(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_smbn(cpu, data, 3)
-}
-#[inline]
-fn execute_smb4(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_smbn(cpu, data, 4)
-}
-#[inline]
-fn execute_smb5(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_smbn(cpu, data, 5)
-}
-#[inline]
-fn execute_smb6(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_smbn(cpu, data, 6)
-}
-#[inline]
-fn execute_smb7(cpu: &mut Cpu6502, data: ExecutionData) -> bool {
-    execute_smbn(cpu, data, 7)
-}
-
-const EXECUTE_LOOKUP: [fn(&mut Cpu6502, ExecutionData) -> bool; 115] = [
-    execute_lda, // LDA
-    execute_ldx, // LDX
-    execute_ldy, // LDY
-    execute_sta, // STA
-    execute_stx, // STX
-    execute_sty, // STY
-    execute_tax, // TAX
-    execute_tay, // TAY
-    execute_txa, // TXA
-    execute_tya, // TYA
-    execute_tsx, // TSX
-    execute_txs, // TXS
-    execute_pha, // PHA
-    execute_php, // PHP
-    execute_pla, // PLA
-    execute_plp, // PLP
-    execute_and, // AND
-    execute_eor, // EOR
-    execute_ora, // ORA
-    execute_bit, // BIT
-    execute_adc, // ADC
-    execute_sbc, // SBC
-    execute_cmp, // CMP
-    execute_cpx, // CPX
-    execute_cpy, // CPY
-    execute_inc, // INC
-    execute_inx, // INX
-    execute_iny, // INY
-    execute_dec, // DEC
-    execute_dex, // DEX
-    execute_dey, // DEY
-    execute_asl, // ASL
-    execute_lsr, // LSR
-    execute_rol, // ROL
-    execute_ror, // ROR
-    execute_jmp, // JMP
-    execute_jsr, // JSR
-    execute_rts, // RTS
-    execute_bcc, // BCC
-    execute_bcs, // BCS
-    execute_beq, // BEQ
-    execute_bmi, // BMI
-    execute_bne, // BNE
-    execute_bpl, // BPL
-    execute_bvc, // BVC
-    execute_bvs, // BVS
-    execute_clc, // CLC
-    execute_cld, // CLD
-    execute_cli, // CLI
-    execute_clv, // CLV
-    execute_sec, // SEC
-    execute_sed, // SED
-    execute_sei, // SEI
-    execute_brk, // BRK
-    execute_nop, // NOP
-    execute_rti, // RTI
-    //
-    execute_slo, // SLO
-    execute_anc, // ANC
-    execute_rla, // RLA
-    execute_sre, // SRE
-    execute_alr, // ALR
-    execute_rra, // RRA
-    execute_arr, // ARR
-    execute_sax, // SAX
-    execute_xaa, // XAA
-    execute_ahx, // AHX
-    execute_tas, // TAS
-    execute_shy, // SHY
-    execute_shx, // SHX
-    execute_lax, // LAX
-    execute_las, // LAS
-    execute_dcp, // DCP
-    execute_axs, // AXS
-    execute_isc, // ISC
-    execute_hlt, // HLT
-    //
-    execute_bra,  // BRA
-    execute_phx,  // PHX
-    execute_phy,  // PHY
-    execute_plx,  // PLX
-    execute_ply,  // PLY
-    execute_stz,  // STZ
-    execute_trb,  // TRB
-    execute_tsb,  // TSB
-    execute_bbr0, // BBR0
-    execute_bbr1, // BBR1
-    execute_bbr2, // BBR2
-    execute_bbr3, // BBR3
-    execute_bbr4, // BBR4
-    execute_bbr5, // BBR5
-    execute_bbr6, // BBR6
-    execute_bbr7, // BBR7
-    execute_bbs0, // BBS0
-    execute_bbs1, // BBS1
-    execute_bbs2, // BBS2
-    execute_bbs3, // BBS3
-    execute_bbs4, // BBS4
-    execute_bbs5, // BBS5
-    execute_bbs6, // BBS6
-    execute_bbs7, // BBS7
-    execute_rmb0, // RMB0
-    execute_rmb1, // RMB1
-    execute_rmb2, // RMB2
-    execute_rmb3, // RMB3
-    execute_rmb4, // RMB4
-    execute_rmb5, // RMB5
-    execute_rmb6, // RMB6
-    execute_rmb7, // RMB7
-    execute_smb0, // SMB0
-    execute_smb1, // SMB1
-    execute_smb2, // SMB2
-    execute_smb3, // SMB3
-    execute_smb4, // SMB4
-    execute_smb5, // SMB5
-    execute_smb6, // SMB6
-    execute_smb7, // SMB7
-];
 
 const INSTRUCTION_LOOKUP_6502: [Instruction; 256] = [
     Instruction(BaseInstruction::BRK, AddressingMode::IMP, 7, false), // 0x00
@@ -2467,3 +1524,801 @@ const INSTRUCTION_LOOKUP_65C02: [Instruction; 256] = [
     Instruction(BaseInstruction::INC, AddressingMode::ABX, 7, false), // 0xFE
     Instruction(BaseInstruction::BBS7, AddressingMode::ZPR, 5, false), // 0xFF
 ];
+
+impl<'a> Cpu6502<'a> {
+    #[inline]
+    fn execute_lda(&mut self, data: ExecutionData) -> bool {
+        self.a = data.read_data(self);
+        self.set_zn_flags(self.a);
+        false
+    }
+
+    #[inline]
+    fn execute_ldx(&mut self, data: ExecutionData) -> bool {
+        self.x = data.read_data(self);
+        self.set_zn_flags(self.x);
+        false
+    }
+
+    #[inline]
+    fn execute_ldy(&mut self, data: ExecutionData) -> bool {
+        self.y = data.read_data(self);
+        self.set_zn_flags(self.y);
+        false
+    }
+
+    #[inline]
+    fn execute_sta(&mut self, data: ExecutionData) -> bool {
+        data.write_data(self, self.a);
+        false
+    }
+
+    #[inline]
+    fn execute_stx(&mut self, data: ExecutionData) -> bool {
+        data.write_data(self, self.x);
+        false
+    }
+
+    #[inline]
+    fn execute_sty(&mut self, data: ExecutionData) -> bool {
+        data.write_data(self, self.y);
+        false
+    }
+
+    #[inline]
+    fn execute_tax(&mut self) -> bool {
+        self.x = self.a;
+        self.set_zn_flags(self.x);
+        false
+    }
+
+    #[inline]
+    fn execute_tay(&mut self) -> bool {
+        self.y = self.a;
+        self.set_zn_flags(self.y);
+        false
+    }
+
+    #[inline]
+    fn execute_txa(&mut self) -> bool {
+        self.a = self.x;
+        self.set_zn_flags(self.a);
+        false
+    }
+
+    #[inline]
+    fn execute_tya(&mut self) -> bool {
+        self.a = self.y;
+        self.set_zn_flags(self.a);
+        false
+    }
+
+    #[inline]
+    fn execute_tsx(&mut self) -> bool {
+        self.x = self.sp;
+        self.set_zn_flags(self.x);
+        false
+    }
+
+    #[inline]
+    fn execute_txs(&mut self) -> bool {
+        self.sp = self.x;
+        false
+    }
+
+    #[inline]
+    fn execute_pha(&mut self) -> bool {
+        self.push_word(self.a);
+        false
+    }
+
+    #[inline]
+    fn execute_php(&mut self) -> bool {
+        self.push_word(Wrapping(
+            (self.status | StatusFlags::B | StatusFlags::U).bits(),
+        ));
+        self.status.remove(StatusFlags::B | StatusFlags::U);
+        false
+    }
+
+    #[inline]
+    fn execute_pla(&mut self) -> bool {
+        self.a = self.pop_word();
+        self.set_zn_flags(self.a);
+        false
+    }
+
+    #[inline]
+    fn execute_plp(&mut self) -> bool {
+        unsafe {
+            self.status = StatusFlags::from_bits_unchecked(self.pop_word().0);
+        }
+        self.status.insert(StatusFlags::U);
+        false
+    }
+
+    #[inline]
+    fn execute_and(&mut self, data: ExecutionData) -> bool {
+        self.a &= data.read_data(self);
+        self.set_zn_flags(self.a);
+        false
+    }
+
+    #[inline]
+    fn execute_eor(&mut self, data: ExecutionData) -> bool {
+        self.a ^= data.read_data(self);
+        self.set_zn_flags(self.a);
+        false
+    }
+
+    #[inline]
+    fn execute_ora(&mut self, data: ExecutionData) -> bool {
+        self.a |= data.read_data(self);
+        self.set_zn_flags(self.a);
+        false
+    }
+
+    fn execute_bit(&mut self, data: ExecutionData) -> bool {
+        let value = data.read_data(self);
+        self.status.set(StatusFlags::Z, (self.a & value).0 == 0);
+        self.status.set(StatusFlags::N, (value.0 & 0x80) != 0);
+        self.status.set(StatusFlags::V, (value.0 & 0x40) != 0);
+        false
+    }
+
+    fn execute_adc_sbc(&mut self, right: u16) -> bool {
+        let left = self.a.0 as u16;
+        let carry: u16 = if self.status.contains(StatusFlags::C) {
+            1
+        } else {
+            0
+        };
+        let result = left + right + carry;
+
+        let is_overflow = if ((!(left ^ right) & (left ^ result)) & 0x0080) != 0 {
+            true
+        } else {
+            false
+        };
+
+        self.a = Wrapping((result & 0x00FF) as u8);
+        self.status.set(StatusFlags::C, (result & 0xFF00) != 0);
+        self.status.set(StatusFlags::V, is_overflow);
+        self.set_zn_flags(self.a);
+        false
+    }
+
+    #[inline]
+    fn execute_adc(&mut self, data: ExecutionData) -> bool {
+        let right = data.read_data(self).0 as u16;
+        self.execute_adc_sbc(right)
+    }
+
+    #[inline]
+    fn execute_sbc(&mut self, data: ExecutionData) -> bool {
+        let right = (!data.read_data(self).0) as u16;
+        self.execute_adc_sbc(right)
+    }
+
+    fn execute_cmp(&mut self, data: ExecutionData) -> bool {
+        let value = data.read_data(self);
+        let tmp = self.a - value;
+        self.status.set(StatusFlags::C, self.a >= value);
+        self.set_zn_flags(tmp);
+        false
+    }
+
+    fn execute_cpx(&mut self, data: ExecutionData) -> bool {
+        let value = data.read_data(self);
+        let tmp = self.x - value;
+        self.status.set(StatusFlags::C, self.x >= value);
+        self.set_zn_flags(tmp);
+        false
+    }
+
+    fn execute_cpy(&mut self, data: ExecutionData) -> bool {
+        let value = data.read_data(self);
+        let tmp = self.y - value;
+        self.status.set(StatusFlags::C, self.y >= value);
+        self.set_zn_flags(tmp);
+        false
+    }
+
+    #[inline]
+    fn execute_inc(&mut self, data: ExecutionData) -> bool {
+        if let ExecutionData::None = data {
+            // If no address is provided the operation is applied to the accumulator
+            self.a += Wrapping(1);
+            self.set_zn_flags(self.a);
+        } else {
+            let value = data.read_data(self) + Wrapping(1);
+            data.write_data(self, value);
+            self.set_zn_flags(value);
+        }
+
+        false
+    }
+
+    #[inline]
+    fn execute_inx(&mut self) -> bool {
+        self.x += Wrapping(1);
+        self.set_zn_flags(self.x);
+        false
+    }
+
+    #[inline]
+    fn execute_iny(&mut self) -> bool {
+        self.y += Wrapping(1);
+        self.set_zn_flags(self.y);
+        false
+    }
+
+    #[inline]
+    fn execute_dec(&mut self, data: ExecutionData) -> bool {
+        if let ExecutionData::None = data {
+            // If no address is provided the operation is applied to the accumulator
+            self.a -= Wrapping(1);
+            self.set_zn_flags(self.a);
+        } else {
+            let value = data.read_data(self) - Wrapping(1);
+            data.write_data(self, value);
+            self.set_zn_flags(value);
+        }
+
+        false
+    }
+
+    #[inline]
+    fn execute_dex(&mut self) -> bool {
+        self.x -= Wrapping(1);
+        self.set_zn_flags(self.x);
+        false
+    }
+
+    #[inline]
+    fn execute_dey(&mut self) -> bool {
+        self.y -= Wrapping(1);
+        self.set_zn_flags(self.y);
+        false
+    }
+
+    fn execute_asl(&mut self, data: ExecutionData) -> bool {
+        if let ExecutionData::None = data {
+            // If no address is provided the operation is applied to the accumulator
+            self.status.set(StatusFlags::C, (self.a.0 & 0x80) != 0);
+            self.a <<= 1;
+            self.set_zn_flags(self.a);
+        } else {
+            let value = data.read_data(self);
+            self.status.set(StatusFlags::C, (value.0 & 0x80) != 0);
+
+            let tmp = value << 1;
+            self.set_zn_flags(tmp);
+            data.write_data(self, tmp);
+        }
+
+        false
+    }
+
+    fn execute_lsr(&mut self, data: ExecutionData) -> bool {
+        if let ExecutionData::None = data {
+            // If no address is provided the operation is applied to the accumulator
+            self.status.set(StatusFlags::C, (self.a.0 & 0x01) != 0);
+            self.a >>= 1;
+            self.set_zn_flags(self.a);
+        } else {
+            let value = data.read_data(self);
+            self.status.set(StatusFlags::C, (value.0 & 0x01) != 0);
+
+            let tmp = value >> 1;
+            self.set_zn_flags(tmp);
+            data.write_data(self, tmp);
+        }
+
+        false
+    }
+
+    fn execute_rol(&mut self, data: ExecutionData) -> bool {
+        if let ExecutionData::None = data {
+            // If no address is provided the operation is applied to the accumulator
+            let tmp = ((self.a.0 as u16) << 1)
+                | if self.status.contains(StatusFlags::C) {
+                    0x0001
+                } else {
+                    0x0000
+                };
+            self.status.set(StatusFlags::C, (tmp & 0xFF00) != 0);
+            self.a = Wrapping((tmp & 0x00FF) as u8);
+            self.set_zn_flags(self.a);
+        } else {
+            let value = data.read_data(self);
+            let tmp = ((value.0 as u16) << 1)
+                | if self.status.contains(StatusFlags::C) {
+                    0x0001
+                } else {
+                    0x0000
+                };
+            self.status.set(StatusFlags::C, (tmp & 0xFF00) != 0);
+
+            let new_value = Wrapping((tmp & 0x00FF) as u8);
+            self.set_zn_flags(new_value);
+            data.write_data(self, new_value);
+        }
+
+        false
+    }
+
+    fn execute_ror(&mut self, data: ExecutionData) -> bool {
+        if let ExecutionData::None = data {
+            // If no address is provided the operation is applied to the accumulator
+            let tmp = (self.a >> 1)
+                | if self.status.contains(StatusFlags::C) {
+                    Wrapping(0x80)
+                } else {
+                    Wrapping(0x00)
+                };
+            self.status.set(StatusFlags::C, (self.a.0 & 0x01) != 0);
+            self.a = tmp;
+            self.set_zn_flags(self.a);
+        } else {
+            let value = data.read_data(self);
+            let tmp = (value >> 1)
+                | if self.status.contains(StatusFlags::C) {
+                    Wrapping(0x80)
+                } else {
+                    Wrapping(0x00)
+                };
+            self.status.set(StatusFlags::C, (value.0 & 0x01) != 0);
+            data.write_data(self, tmp);
+            self.set_zn_flags(tmp);
+        }
+
+        false
+    }
+
+    #[inline]
+    fn execute_jmp(&mut self, data: ExecutionData) -> bool {
+        self.pc = data.read_address();
+        false
+    }
+
+    #[inline]
+    fn execute_jsr(&mut self, data: ExecutionData) -> bool {
+        self.pc -= Wrapping(1);
+        self.push_address(self.pc);
+        self.pc = data.read_address();
+        false
+    }
+
+    #[inline]
+    fn execute_rts(&mut self, _: ExecutionData) -> bool {
+        self.pc = self.pop_address() + Wrapping(1);
+        false
+    }
+
+    #[inline]
+    fn execute_bcc(&mut self, data: ExecutionData) -> bool {
+        if !self.status.contains(StatusFlags::C) {
+            self.pc = data.read_address();
+            true
+        } else {
+            false
+        }
+    }
+
+    #[inline]
+    fn execute_bcs(&mut self, data: ExecutionData) -> bool {
+        if self.status.contains(StatusFlags::C) {
+            self.pc = data.read_address();
+            true
+        } else {
+            false
+        }
+    }
+
+    #[inline]
+    fn execute_beq(&mut self, data: ExecutionData) -> bool {
+        if self.status.contains(StatusFlags::Z) {
+            self.pc = data.read_address();
+            true
+        } else {
+            false
+        }
+    }
+
+    #[inline]
+    fn execute_bmi(&mut self, data: ExecutionData) -> bool {
+        if self.status.contains(StatusFlags::N) {
+            self.pc = data.read_address();
+            true
+        } else {
+            false
+        }
+    }
+
+    #[inline]
+    fn execute_bne(&mut self, data: ExecutionData) -> bool {
+        if !self.status.contains(StatusFlags::Z) {
+            self.pc = data.read_address();
+            true
+        } else {
+            false
+        }
+    }
+
+    #[inline]
+    fn execute_bpl(&mut self, data: ExecutionData) -> bool {
+        if !self.status.contains(StatusFlags::N) {
+            self.pc = data.read_address();
+            true
+        } else {
+            false
+        }
+    }
+
+    #[inline]
+    fn execute_bvc(&mut self, data: ExecutionData) -> bool {
+        if !self.status.contains(StatusFlags::V) {
+            self.pc = data.read_address();
+            true
+        } else {
+            false
+        }
+    }
+
+    #[inline]
+    fn execute_bvs(&mut self, data: ExecutionData) -> bool {
+        if self.status.contains(StatusFlags::V) {
+            self.pc = data.read_address();
+            true
+        } else {
+            false
+        }
+    }
+
+    #[inline]
+    fn execute_clc(&mut self) -> bool {
+        self.status.remove(StatusFlags::C);
+        false
+    }
+
+    #[inline]
+    fn execute_cld(&mut self) -> bool {
+        self.status.remove(StatusFlags::D);
+        false
+    }
+
+    #[inline]
+    fn execute_cli(&mut self) -> bool {
+        self.status.remove(StatusFlags::I);
+        false
+    }
+
+    #[inline]
+    fn execute_clv(&mut self) -> bool {
+        self.status.remove(StatusFlags::V);
+        false
+    }
+
+    #[inline]
+    fn execute_sec(&mut self) -> bool {
+        self.status.insert(StatusFlags::C);
+        false
+    }
+
+    #[inline]
+    fn execute_sed(&mut self) -> bool {
+        self.status.insert(StatusFlags::D);
+        false
+    }
+
+    #[inline]
+    fn execute_sei(&mut self) -> bool {
+        self.status.insert(StatusFlags::I);
+        false
+    }
+
+    #[inline]
+    fn execute_brk(&mut self) -> bool {
+        self.pc += Wrapping(1);
+        self.push_address(self.pc);
+
+        self.status.insert(StatusFlags::B | StatusFlags::I);
+        self.push_word(Wrapping(self.status.bits()));
+        self.status.remove(StatusFlags::B);
+
+        self.pc = self.read_address(IRQ_VECTOR);
+        false
+    }
+
+    #[inline]
+    fn execute_rti(&mut self) -> bool {
+        unsafe {
+            self.status = StatusFlags::from_bits_unchecked(self.pop_word().0);
+        }
+        self.status.remove(StatusFlags::B | StatusFlags::U);
+        self.pc = self.pop_address();
+        false
+    }
+
+    fn execute_slo(&mut self, data: ExecutionData) -> bool {
+        let value = data.read_data(self);
+        self.status.set(StatusFlags::C, (value.0 & 0x80) != 0);
+
+        let tmp = value << 1;
+        data.write_data(self, tmp);
+
+        self.a |= tmp;
+        self.set_zn_flags(self.a);
+
+        false
+    }
+
+    #[inline]
+    fn execute_anc(&mut self, data: ExecutionData) -> bool {
+        self.status.set(StatusFlags::C, (self.a.0 & 0x80) != 0);
+        self.a &= data.read_data(self);
+        self.set_zn_flags(self.a);
+        false
+    }
+
+    fn execute_rla(&mut self, data: ExecutionData) -> bool {
+        let value = data.read_data(self);
+        let tmp = ((value.0 as u16) << 1)
+            | if self.status.contains(StatusFlags::C) {
+                0x0001
+            } else {
+                0x0000
+            };
+        self.status.set(StatusFlags::C, (tmp & 0xFF00) != 0);
+
+        let new_value = Wrapping((tmp & 0x00FF) as u8);
+        data.write_data(self, new_value);
+
+        self.a &= new_value;
+        self.set_zn_flags(self.a);
+
+        false
+    }
+
+    fn execute_sre(&mut self, data: ExecutionData) -> bool {
+        let value = data.read_data(self);
+        self.status.set(StatusFlags::C, (value.0 & 0x01) != 0);
+
+        let tmp = value >> 1;
+        data.write_data(self, tmp);
+
+        self.a ^= tmp;
+        self.set_zn_flags(self.a);
+
+        false
+    }
+
+    #[inline]
+    fn execute_alr(&mut self, data: ExecutionData) -> bool {
+        self.a &= data.read_data(self);
+        self.status.set(StatusFlags::C, (self.a.0 & 0x01) != 0);
+        self.a >>= 1;
+        self.set_zn_flags(self.a);
+        false
+    }
+
+    fn execute_rra(&mut self, data: ExecutionData) -> bool {
+        let value = data.read_data(self);
+        let tmp = (value >> 1)
+            | if self.status.contains(StatusFlags::C) {
+                Wrapping(0x80)
+            } else {
+                Wrapping(0x00)
+            };
+        self.status.set(StatusFlags::C, (value.0 & 0x01) != 0);
+        data.write_data(self, tmp);
+
+        let right = tmp.0 as u16;
+        self.execute_adc_sbc(right)
+    }
+
+    fn execute_arr(&mut self, data: ExecutionData) -> bool {
+        self.a &= data.read_data(self);
+        let tmp = (self.a >> 1)
+            | if self.status.contains(StatusFlags::C) {
+                Wrapping(0x80)
+            } else {
+                Wrapping(0x00)
+            };
+        self.a = tmp;
+        self.set_zn_flags(self.a);
+        false
+    }
+
+    #[inline]
+    fn execute_sax(&mut self, data: ExecutionData) -> bool {
+        data.write_data(self, self.a & self.x);
+        false
+    }
+
+    #[inline]
+    fn execute_xaa(&mut self, data: ExecutionData) -> bool {
+        self.a = self.a & self.x & data.read_data(self);
+        self.set_zn_flags(self.a);
+        false
+    }
+
+    #[inline]
+    fn execute_ahx(&mut self, data: ExecutionData) -> bool {
+        data.write_data(self, self.a & self.x & data.read_data(self));
+        false
+    }
+
+    #[inline]
+    fn execute_tas(&mut self, data: ExecutionData) -> bool {
+        self.sp = self.a & self.x;
+        data.write_data(self, self.a & self.x & data.read_data(self));
+        false
+    }
+
+    #[inline]
+    fn execute_shy(&mut self, data: ExecutionData) -> bool {
+        data.write_data(self, self.y & data.read_data(self));
+        false
+    }
+
+    #[inline]
+    fn execute_shx(&mut self, data: ExecutionData) -> bool {
+        data.write_data(self, self.x & data.read_data(self));
+        false
+    }
+
+    #[inline]
+    fn execute_lax(&mut self, data: ExecutionData) -> bool {
+        self.a = data.read_data(self);
+        self.x = self.a;
+        self.set_zn_flags(self.a);
+        false
+    }
+
+    #[inline]
+    fn execute_las(&mut self, data: ExecutionData) -> bool {
+        self.a = data.read_data(self) & self.sp;
+        self.x = self.a;
+        self.sp = self.a;
+        self.set_zn_flags(self.a);
+        false
+    }
+
+    fn execute_dcp(&mut self, data: ExecutionData) -> bool {
+        let value = data.read_data(self) - Wrapping(1);
+        data.write_data(self, value);
+
+        let tmp = self.a - value;
+        self.status.set(StatusFlags::C, self.a >= value);
+        self.set_zn_flags(tmp);
+
+        false
+    }
+
+    #[inline]
+    fn execute_axs(&mut self, data: ExecutionData) -> bool {
+        let value = data.read_data(self);
+        let tmp = (self.a & self.x) - value;
+        self.status.set(StatusFlags::C, (self.a & self.x) >= value);
+        self.set_zn_flags(tmp);
+        self.x = tmp;
+        false
+    }
+
+    #[inline]
+    fn execute_isc(&mut self, data: ExecutionData) -> bool {
+        let value = data.read_data(self) + Wrapping(1);
+        data.write_data(self, value);
+
+        let right = (!value.0) as u16;
+        self.execute_adc_sbc(right)
+    }
+
+    /*
+        65C02 instructions
+    */
+
+    #[inline]
+    fn execute_bra(&mut self, data: ExecutionData) -> bool {
+        self.pc = data.read_address();
+        true
+    }
+
+    #[inline]
+    fn execute_phx(&mut self) -> bool {
+        self.push_word(self.x);
+        false
+    }
+
+    #[inline]
+    fn execute_phy(&mut self) -> bool {
+        self.push_word(self.y);
+        false
+    }
+
+    #[inline]
+    fn execute_plx(&mut self) -> bool {
+        self.x = self.pop_word();
+        self.set_zn_flags(self.x);
+        false
+    }
+
+    #[inline]
+    fn execute_ply(&mut self) -> bool {
+        self.y = self.pop_word();
+        self.set_zn_flags(self.y);
+        false
+    }
+
+    #[inline]
+    fn execute_stz(&mut self, data: ExecutionData) -> bool {
+        data.write_data(self, Wrapping(0));
+        false
+    }
+
+    #[inline]
+    fn execute_trb(&mut self, data: ExecutionData) -> bool {
+        let mut value = data.read_data(self).0;
+        value &= !self.a.0;
+        self.status.set(StatusFlags::Z, value == 0);
+        data.write_data(self, Wrapping(value));
+
+        false
+    }
+
+    #[inline]
+    fn execute_tsb(&mut self, data: ExecutionData) -> bool {
+        let mut value = data.read_data(self).0;
+        value |= self.a.0;
+        self.status.set(StatusFlags::Z, value == 0);
+        data.write_data(self, Wrapping(value));
+
+        false
+    }
+
+    #[inline]
+    fn execute_bbr(&mut self, data: ExecutionData, n: usize) -> bool {
+        let value = data.read_data(self).0;
+
+        if (value & (0x01 << n)) == 0 {
+            self.pc = data.read_address();
+            true
+        } else {
+            false
+        }
+    }
+
+    #[inline]
+    fn execute_bbs(&mut self, data: ExecutionData, n: usize) -> bool {
+        let value = data.read_data(self).0;
+
+        if (value & (0x01 << n)) != 0 {
+            self.pc = data.read_address();
+            true
+        } else {
+            false
+        }
+    }
+
+    #[inline]
+    fn execute_rmb(&mut self, data: ExecutionData, n: usize) -> bool {
+        let mut value = data.read_data(self).0;
+        value &= !(0x01 << n);
+        self.status.set(StatusFlags::Z, value == 0);
+        data.write_data(self, Wrapping(value));
+
+        false
+    }
+
+    #[inline]
+    fn execute_smb(&mut self, data: ExecutionData, n: usize) -> bool {
+        let mut value = data.read_data(self).0;
+        value |= 0x01 << n;
+        self.status.set(StatusFlags::Z, value == 0);
+        data.write_data(self, Wrapping(value));
+
+        false
+    }
+}

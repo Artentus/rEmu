@@ -7,11 +7,11 @@ use strum_macros::{AsRefStr, Display, IntoStaticStr};
 
 pub type Address = u24w;
 pub type Word = u16w;
-pub type HalfWord = u8w;
+pub type Byte = u8w;
 
 #[repr(C)]
 union Register {
-    lo_hi: [HalfWord; 2],
+    lo_hi: [Byte; 2],
     full: Word,
 }
 impl Register {
@@ -21,20 +21,20 @@ impl Register {
     }
 
     #[inline]
-    fn lo(&self) -> &HalfWord {
+    fn lo(&self) -> &Byte {
         unsafe { &self.lo_hi[0] }
     }
     #[inline]
-    fn hi(&self) -> &HalfWord {
+    fn hi(&self) -> &Byte {
         unsafe { &self.lo_hi[1] }
     }
 
     #[inline]
-    fn lo_mut(&mut self) -> &mut HalfWord {
+    fn lo_mut(&mut self) -> &mut Byte {
         unsafe { &mut self.lo_hi[0] }
     }
     #[inline]
-    fn hi_mut(&mut self) -> &mut HalfWord {
+    fn hi_mut(&mut self) -> &mut Byte {
         unsafe { &mut self.lo_hi[1] }
     }
 }
@@ -83,8 +83,39 @@ bitflags! {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Display, AsRefStr, IntoStaticStr)]
-pub enum AddressingMode {}
+#[derive(PartialEq, Eq, Clone, Copy, Debug, strum_macros::Display, AsRefStr, IntoStaticStr)]
+enum AddressingMode {
+    /// Implied
+    IMP,
+    /// Immediate
+    IMM,
+    /// Zero-page
+    ZP0,
+    /// Zero-page + relative offset
+    ZPR,
+    /// Zero-page + X register offset
+    ZPX,
+    /// Zero-page + Y register offset
+    ZPY,
+    /// Relative
+    REL,
+    /// Absolute
+    ABS,
+    /// Absolute + X register offset
+    ABX,
+    /// Absolute + Y register offset
+    ABY,
+    /// Indirect
+    IND,
+    /// Indirect zero page
+    IZP,
+    /// Indirect (zero-page + X register offset)
+    IZX,
+    /// (Indirect zero-page) + Y register offset
+    IZY,
+    /// Indirect + X register offset
+    IAX,
+}
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Display, AsRefStr, IntoStaticStr)]
 pub enum BaseInstruction {}
@@ -92,62 +123,101 @@ pub enum BaseInstruction {}
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub struct Instruction(BaseInstruction, AddressingMode, u32, bool);
 
+#[derive(Clone, Copy, Debug)]
+pub struct Asm65C816Instruction {}
+impl Display for Asm65C816Instruction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!()
+    }
+}
+impl AsmInstruction<Address> for Asm65C816Instruction {
+    fn address(&self) -> Address {
+        todo!()
+    }
+
+    fn byte_size(&self) -> usize {
+        todo!()
+    }
+
+    fn mnemonic(&self) -> &str {
+        todo!()
+    }
+}
+
+const COP_VECTOR_NAT: Address = Address::new(0xFFE4);
+const BRK_VECTOR_NAT: Address = Address::new(0xFFE6);
+const ABORT_VECTOR_NAT: Address = Address::new(0xFFE8);
+const NMI_VECTOR_NAT: Address = Address::new(0xFFEA);
+const IRQ_VECTOR_NAT: Address = Address::new(0xFFEE);
+
+const COP_VECTOR_EMU: Address = Address::new(0xFFF4);
+const ABORT_VECTOR_EMU: Address = Address::new(0xFFF8);
+const NMI_VECTOR_EMU: Address = Address::new(0xFFFA);
+const IRQ_BRK_VECTOR_EMU: Address = Address::new(0xFFFE);
+
+const RESET_VECTOR: Address = Address::new(0xFFFC);
+
 pub struct Cpu65C816<'a> {
     /// Accumulator
-    c: Register,
+    a: Register,
     /// X index register
     x: Register,
     /// Y index register
     y: Register,
-    /// Data bank
-    db: HalfWord,
     /// Stack pointer
     sp: Register,
+    /// Direct page register
+    dp: Register,
+    /// Data bank
+    db: Byte,
+    /// Program bank
+    pb: Byte,
     /// Program counter
     pc: Word,
-    /// Program bank
-    pb: HalfWord,
-    /// Direct register
-    d: Register,
     /// Status register
     status: StatusFlags,
     /// Emulation mode flag
     emulation_mode: bool,
 
-    bus: EmuRef<Bus<'a, Address, HalfWord>>,
+    bus: EmuRef<Bus<'a, Address, Byte>>,
 }
 impl<'a> Cpu65C816<'a> {
-    pub fn new(bus: EmuRef<Bus<'a, Address, HalfWord>>) -> Self {
+    pub fn new(bus: EmuRef<Bus<'a, Address, Byte>>) -> Self {
         Self {
-            c: Register::new(),
+            a: Register::new(),
             x: Register::new(),
             y: Register::new(),
-            db: Wrapping(0),
             sp: Register::new(),
-            pc: Wrapping(0),
+            dp: Register::new(),
+            db: Wrapping(0),
             pb: Wrapping(0),
-            d: Register::new(),
+            pc: Wrapping(0),
             status: StatusFlags::empty(),
             emulation_mode: false,
             bus,
         }
     }
+}
+impl<'a> Display for Cpu65C816<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!()
+    }
+}
+impl<'a> Cpu<Address, Byte, Asm65C816Instruction> for Cpu65C816<'a> {
+    fn reset(&mut self) -> u32 {
+        *self.a = Wrapping(0);
+        *self.x = Wrapping(0);
+        *self.y = Wrapping(0);
+        self.emulation_mode = true;
 
-    #[inline]
-    fn a(&self) -> &HalfWord {
-        self.c.lo()
-    }
-    #[inline]
-    fn b(&self) -> &HalfWord {
-        self.c.hi()
+        8
     }
 
-    #[inline]
-    fn a_mut(&mut self) -> &mut HalfWord {
-        self.c.lo_mut()
+    fn execute_next_instruction(&mut self) -> u32 {
+        todo!()
     }
-    #[inline]
-    fn b_mut(&mut self) -> &mut HalfWord {
-        self.c.hi_mut()
+
+    fn disassemble_current(&self, range: usize) -> Box<[Asm65C816Instruction]> {
+        todo!()
     }
 }

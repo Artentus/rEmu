@@ -172,7 +172,7 @@ fn run_emu<P: AsRef<Path>>(
         let h = (screen_buffer.height() * scaler.scale_factor()) as f32 * scale;
         (w, h)
     };
-    let window_mode = WindowMode::default().dimensions(width + (height * 0.5), height);
+    let window_mode = WindowMode::default().dimensions(width, height);
 
     let builder = ContextBuilder::new(TITLE, AUTHOR)
         .window_setup(window_setup)
@@ -243,7 +243,7 @@ impl<'a> EmuState<'a> {
             scaler_output_buffer: None,
             font,
             audio_buffer,
-            run: false,
+            run: true,
         }
     }
 }
@@ -314,6 +314,7 @@ impl<'a> EventHandler for EmuState<'a> {
             graphics::draw(ctx, &screen, params)?;
         }
 
+        /*
         if !self.run {
             let emu_info = format!("{}", self.emu);
             let emu_info_frag = TextFragment::new(emu_info).font(self.font);
@@ -327,6 +328,7 @@ impl<'a> EventHandler for EmuState<'a> {
                 ]),
             )?;
         }
+        */
 
         graphics::present(ctx)?;
         timer::yield_now();
