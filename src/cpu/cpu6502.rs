@@ -638,7 +638,7 @@ impl<'a> Cpu6502<'a> {
         let instruction_data = addressing_mode.read_next(self);
         let (execution_data, page_crossed) = instruction_data.to_execution_data(self);
 
-        let branch_taken = match base_instruction {
+        let additional_cycles = match base_instruction {
             BaseInstruction::LDA => self.execute_lda(execution_data),
             BaseInstruction::LDX => self.execute_ldx(execution_data),
             BaseInstruction::LDY => self.execute_ldy(execution_data),
@@ -693,7 +693,7 @@ impl<'a> Cpu6502<'a> {
             BaseInstruction::SED => self.execute_sed(),
             BaseInstruction::SEI => self.execute_sei(),
             BaseInstruction::BRK => self.execute_brk(),
-            BaseInstruction::NOP => false,
+            BaseInstruction::NOP => 0,
             BaseInstruction::RTI => self.execute_rti(),
             BaseInstruction::SLO => self.execute_slo(execution_data),
             BaseInstruction::ANC => self.execute_anc(execution_data),
@@ -762,7 +762,7 @@ impl<'a> Cpu6502<'a> {
             } else {
                 0
             }
-            + if branch_taken { 1 } else { 0 }
+            + additional_cycles
     }
 
     fn disassemble(&self, address: Address, lookup: &[Instruction; 256]) -> Asm6502Instruction {
@@ -1532,146 +1532,146 @@ const INSTRUCTION_LOOKUP_65C02: [Instruction; 256] = [
 
 impl<'a> Cpu6502<'a> {
     #[inline]
-    fn execute_lda(&mut self, data: ExecutionData) -> bool {
+    fn execute_lda(&mut self, data: ExecutionData) -> u32 {
         self.a = data.read_data(self);
         self.set_zn_flags(self.a);
-        false
+        0
     }
 
     #[inline]
-    fn execute_ldx(&mut self, data: ExecutionData) -> bool {
+    fn execute_ldx(&mut self, data: ExecutionData) -> u32 {
         self.x = data.read_data(self);
         self.set_zn_flags(self.x);
-        false
+        0
     }
 
     #[inline]
-    fn execute_ldy(&mut self, data: ExecutionData) -> bool {
+    fn execute_ldy(&mut self, data: ExecutionData) -> u32 {
         self.y = data.read_data(self);
         self.set_zn_flags(self.y);
-        false
+        0
     }
 
     #[inline]
-    fn execute_sta(&mut self, data: ExecutionData) -> bool {
+    fn execute_sta(&mut self, data: ExecutionData) -> u32 {
         data.write_data(self, self.a);
-        false
+        0
     }
 
     #[inline]
-    fn execute_stx(&mut self, data: ExecutionData) -> bool {
+    fn execute_stx(&mut self, data: ExecutionData) -> u32 {
         data.write_data(self, self.x);
-        false
+        0
     }
 
     #[inline]
-    fn execute_sty(&mut self, data: ExecutionData) -> bool {
+    fn execute_sty(&mut self, data: ExecutionData) -> u32 {
         data.write_data(self, self.y);
-        false
+        0
     }
 
     #[inline]
-    fn execute_tax(&mut self) -> bool {
+    fn execute_tax(&mut self) -> u32 {
         self.x = self.a;
         self.set_zn_flags(self.x);
-        false
+        0
     }
 
     #[inline]
-    fn execute_tay(&mut self) -> bool {
+    fn execute_tay(&mut self) -> u32 {
         self.y = self.a;
         self.set_zn_flags(self.y);
-        false
+        0
     }
 
     #[inline]
-    fn execute_txa(&mut self) -> bool {
+    fn execute_txa(&mut self) -> u32 {
         self.a = self.x;
         self.set_zn_flags(self.a);
-        false
+        0
     }
 
     #[inline]
-    fn execute_tya(&mut self) -> bool {
+    fn execute_tya(&mut self) -> u32 {
         self.a = self.y;
         self.set_zn_flags(self.a);
-        false
+        0
     }
 
     #[inline]
-    fn execute_tsx(&mut self) -> bool {
+    fn execute_tsx(&mut self) -> u32 {
         self.x = self.sp;
         self.set_zn_flags(self.x);
-        false
+        0
     }
 
     #[inline]
-    fn execute_txs(&mut self) -> bool {
+    fn execute_txs(&mut self) -> u32 {
         self.sp = self.x;
-        false
+        0
     }
 
     #[inline]
-    fn execute_pha(&mut self) -> bool {
+    fn execute_pha(&mut self) -> u32 {
         self.push_word(self.a);
-        false
+        0
     }
 
     #[inline]
-    fn execute_php(&mut self) -> bool {
+    fn execute_php(&mut self) -> u32 {
         self.push_word(Wrapping(
             (self.status | StatusFlags::B | StatusFlags::U).bits(),
         ));
         self.status.remove(StatusFlags::B | StatusFlags::U);
-        false
+        0
     }
 
     #[inline]
-    fn execute_pla(&mut self) -> bool {
+    fn execute_pla(&mut self) -> u32 {
         self.a = self.pop_word();
         self.set_zn_flags(self.a);
-        false
+        0
     }
 
     #[inline]
-    fn execute_plp(&mut self) -> bool {
+    fn execute_plp(&mut self) -> u32 {
         unsafe {
             self.status = StatusFlags::from_bits_unchecked(self.pop_word().0);
         }
         self.status.insert(StatusFlags::U);
-        false
+        0
     }
 
     #[inline]
-    fn execute_and(&mut self, data: ExecutionData) -> bool {
+    fn execute_and(&mut self, data: ExecutionData) -> u32 {
         self.a &= data.read_data(self);
         self.set_zn_flags(self.a);
-        false
+        0
     }
 
     #[inline]
-    fn execute_eor(&mut self, data: ExecutionData) -> bool {
+    fn execute_eor(&mut self, data: ExecutionData) -> u32 {
         self.a ^= data.read_data(self);
         self.set_zn_flags(self.a);
-        false
+        0
     }
 
     #[inline]
-    fn execute_ora(&mut self, data: ExecutionData) -> bool {
+    fn execute_ora(&mut self, data: ExecutionData) -> u32 {
         self.a |= data.read_data(self);
         self.set_zn_flags(self.a);
-        false
+        0
     }
 
-    fn execute_bit(&mut self, data: ExecutionData) -> bool {
+    fn execute_bit(&mut self, data: ExecutionData) -> u32 {
         let value = data.read_data(self);
         self.status.set(StatusFlags::Z, (self.a & value).0 == 0);
         self.status.set(StatusFlags::N, (value.0 & 0x80) != 0);
         self.status.set(StatusFlags::V, (value.0 & 0x40) != 0);
-        false
+        0
     }
 
-    fn execute_adc_decimal(&mut self, right: u16) -> bool {
+    fn execute_adc_decimal(&mut self, right: u16) -> u32 {
         let left = self.a.0 as u16;
         let carry: u16 = if self.status.contains(StatusFlags::C) {
             1
@@ -1703,14 +1703,14 @@ impl<'a> Cpu6502<'a> {
             self.status
                 .set(StatusFlags::Z, ((left + right + carry) & 0x00FF) == 0);
             self.status.set(StatusFlags::N, invalid_n);
+            0
         } else {
             self.set_zn_flags(self.a);
+            1
         }
-
-        false
     }
 
-    fn execute_sbc_decimal(&mut self, right: u16) -> bool {
+    fn execute_sbc_decimal(&mut self, right: u16) -> u32 {
         let left = self.a.0 as u16;
         let carry: i16 = if self.status.contains(StatusFlags::C) {
             1
@@ -1741,14 +1741,14 @@ impl<'a> Cpu6502<'a> {
 
         if self.emulate_invalid_decimal_flags {
             self.set_zn_flags(Wrapping((bin_result & 0x00FF) as u8));
+            0
         } else {
             self.set_zn_flags(self.a);
+            1
         }
-
-        false
     }
 
-    fn execute_adc_sbc(&mut self, right: u16) -> bool {
+    fn execute_adc_sbc(&mut self, right: u16) -> u32 {
         let left = self.a.0 as u16;
         let carry: u16 = if self.status.contains(StatusFlags::C) {
             1
@@ -1764,10 +1764,10 @@ impl<'a> Cpu6502<'a> {
         self.status.set(StatusFlags::V, is_overflow);
         self.set_zn_flags(self.a);
 
-        false
+        0
     }
 
-    fn execute_adc(&mut self, data: ExecutionData) -> bool {
+    fn execute_adc(&mut self, data: ExecutionData) -> u32 {
         let right = data.read_data(self).0 as u16;
         if self.enable_decimal_mode && self.status.contains(StatusFlags::D) {
             self.execute_adc_decimal(right)
@@ -1776,8 +1776,8 @@ impl<'a> Cpu6502<'a> {
         }
     }
 
-    fn execute_sbc(&mut self, data: ExecutionData) -> bool {
-        if self.enable_decimal_mode &&self.status.contains(StatusFlags::D) {
+    fn execute_sbc(&mut self, data: ExecutionData) -> u32 {
+        if self.enable_decimal_mode && self.status.contains(StatusFlags::D) {
             let right = data.read_data(self).0 as u16;
             self.execute_sbc_decimal(right)
         } else {
@@ -1786,32 +1786,32 @@ impl<'a> Cpu6502<'a> {
         }
     }
 
-    fn execute_cmp(&mut self, data: ExecutionData) -> bool {
+    fn execute_cmp(&mut self, data: ExecutionData) -> u32 {
         let value = data.read_data(self);
         let tmp = self.a - value;
         self.status.set(StatusFlags::C, self.a >= value);
         self.set_zn_flags(tmp);
-        false
+        0
     }
 
-    fn execute_cpx(&mut self, data: ExecutionData) -> bool {
+    fn execute_cpx(&mut self, data: ExecutionData) -> u32 {
         let value = data.read_data(self);
         let tmp = self.x - value;
         self.status.set(StatusFlags::C, self.x >= value);
         self.set_zn_flags(tmp);
-        false
+        0
     }
 
-    fn execute_cpy(&mut self, data: ExecutionData) -> bool {
+    fn execute_cpy(&mut self, data: ExecutionData) -> u32 {
         let value = data.read_data(self);
         let tmp = self.y - value;
         self.status.set(StatusFlags::C, self.y >= value);
         self.set_zn_flags(tmp);
-        false
+        0
     }
 
     #[inline]
-    fn execute_inc(&mut self, data: ExecutionData) -> bool {
+    fn execute_inc(&mut self, data: ExecutionData) -> u32 {
         if let ExecutionData::None = data {
             // If no address is provided the operation is applied to the accumulator
             self.a += Wrapping(1);
@@ -1822,25 +1822,25 @@ impl<'a> Cpu6502<'a> {
             self.set_zn_flags(value);
         }
 
-        false
+        0
     }
 
     #[inline]
-    fn execute_inx(&mut self) -> bool {
+    fn execute_inx(&mut self) -> u32 {
         self.x += Wrapping(1);
         self.set_zn_flags(self.x);
-        false
+        0
     }
 
     #[inline]
-    fn execute_iny(&mut self) -> bool {
+    fn execute_iny(&mut self) -> u32 {
         self.y += Wrapping(1);
         self.set_zn_flags(self.y);
-        false
+        0
     }
 
     #[inline]
-    fn execute_dec(&mut self, data: ExecutionData) -> bool {
+    fn execute_dec(&mut self, data: ExecutionData) -> u32 {
         if let ExecutionData::None = data {
             // If no address is provided the operation is applied to the accumulator
             self.a -= Wrapping(1);
@@ -1851,24 +1851,24 @@ impl<'a> Cpu6502<'a> {
             self.set_zn_flags(value);
         }
 
-        false
+        0
     }
 
     #[inline]
-    fn execute_dex(&mut self) -> bool {
+    fn execute_dex(&mut self) -> u32 {
         self.x -= Wrapping(1);
         self.set_zn_flags(self.x);
-        false
+        0
     }
 
     #[inline]
-    fn execute_dey(&mut self) -> bool {
+    fn execute_dey(&mut self) -> u32 {
         self.y -= Wrapping(1);
         self.set_zn_flags(self.y);
-        false
+        0
     }
 
-    fn execute_asl(&mut self, data: ExecutionData) -> bool {
+    fn execute_asl(&mut self, data: ExecutionData) -> u32 {
         if let ExecutionData::None = data {
             // If no address is provided the operation is applied to the accumulator
             self.status.set(StatusFlags::C, (self.a.0 & 0x80) != 0);
@@ -1883,10 +1883,10 @@ impl<'a> Cpu6502<'a> {
             data.write_data(self, tmp);
         }
 
-        false
+        0
     }
 
-    fn execute_lsr(&mut self, data: ExecutionData) -> bool {
+    fn execute_lsr(&mut self, data: ExecutionData) -> u32 {
         if let ExecutionData::None = data {
             // If no address is provided the operation is applied to the accumulator
             self.status.set(StatusFlags::C, (self.a.0 & 0x01) != 0);
@@ -1901,10 +1901,10 @@ impl<'a> Cpu6502<'a> {
             data.write_data(self, tmp);
         }
 
-        false
+        0
     }
 
-    fn execute_rol(&mut self, data: ExecutionData) -> bool {
+    fn execute_rol(&mut self, data: ExecutionData) -> u32 {
         if let ExecutionData::None = data {
             // If no address is provided the operation is applied to the accumulator
             let tmp = ((self.a.0 as u16) << 1)
@@ -1931,10 +1931,10 @@ impl<'a> Cpu6502<'a> {
             data.write_data(self, new_value);
         }
 
-        false
+        0
     }
 
-    fn execute_ror(&mut self, data: ExecutionData) -> bool {
+    fn execute_ror(&mut self, data: ExecutionData) -> u32 {
         if let ExecutionData::None = data {
             // If no address is provided the operation is applied to the accumulator
             let tmp = (self.a >> 1)
@@ -1959,153 +1959,153 @@ impl<'a> Cpu6502<'a> {
             self.set_zn_flags(tmp);
         }
 
-        false
+        0
     }
 
     #[inline]
-    fn execute_jmp(&mut self, data: ExecutionData) -> bool {
+    fn execute_jmp(&mut self, data: ExecutionData) -> u32 {
         self.pc = data.read_address();
-        false
+        0
     }
 
     #[inline]
-    fn execute_jsr(&mut self, data: ExecutionData) -> bool {
+    fn execute_jsr(&mut self, data: ExecutionData) -> u32 {
         self.pc -= Wrapping(1);
         self.push_address(self.pc);
         self.pc = data.read_address();
-        false
+        0
     }
 
     #[inline]
-    fn execute_rts(&mut self, _: ExecutionData) -> bool {
+    fn execute_rts(&mut self, _: ExecutionData) -> u32 {
         self.pc = self.pop_address() + Wrapping(1);
-        false
+        0
     }
 
     #[inline]
-    fn execute_bcc(&mut self, data: ExecutionData) -> bool {
+    fn execute_bcc(&mut self, data: ExecutionData) -> u32 {
         if !self.status.contains(StatusFlags::C) {
             self.pc = data.read_address();
-            true
+            1
         } else {
-            false
+            0
         }
     }
 
     #[inline]
-    fn execute_bcs(&mut self, data: ExecutionData) -> bool {
+    fn execute_bcs(&mut self, data: ExecutionData) -> u32 {
         if self.status.contains(StatusFlags::C) {
             self.pc = data.read_address();
-            true
+            1
         } else {
-            false
+            0
         }
     }
 
     #[inline]
-    fn execute_beq(&mut self, data: ExecutionData) -> bool {
+    fn execute_beq(&mut self, data: ExecutionData) -> u32 {
         if self.status.contains(StatusFlags::Z) {
             self.pc = data.read_address();
-            true
+            1
         } else {
-            false
+            0
         }
     }
 
     #[inline]
-    fn execute_bmi(&mut self, data: ExecutionData) -> bool {
+    fn execute_bmi(&mut self, data: ExecutionData) -> u32 {
         if self.status.contains(StatusFlags::N) {
             self.pc = data.read_address();
-            true
+            1
         } else {
-            false
+            0
         }
     }
 
     #[inline]
-    fn execute_bne(&mut self, data: ExecutionData) -> bool {
+    fn execute_bne(&mut self, data: ExecutionData) -> u32 {
         if !self.status.contains(StatusFlags::Z) {
             self.pc = data.read_address();
-            true
+            1
         } else {
-            false
+            0
         }
     }
 
     #[inline]
-    fn execute_bpl(&mut self, data: ExecutionData) -> bool {
+    fn execute_bpl(&mut self, data: ExecutionData) -> u32 {
         if !self.status.contains(StatusFlags::N) {
             self.pc = data.read_address();
-            true
+            1
         } else {
-            false
+            0
         }
     }
 
     #[inline]
-    fn execute_bvc(&mut self, data: ExecutionData) -> bool {
+    fn execute_bvc(&mut self, data: ExecutionData) -> u32 {
         if !self.status.contains(StatusFlags::V) {
             self.pc = data.read_address();
-            true
+            1
         } else {
-            false
+            0
         }
     }
 
     #[inline]
-    fn execute_bvs(&mut self, data: ExecutionData) -> bool {
+    fn execute_bvs(&mut self, data: ExecutionData) -> u32 {
         if self.status.contains(StatusFlags::V) {
             self.pc = data.read_address();
-            true
+            1
         } else {
-            false
+            0
         }
     }
 
     #[inline]
-    fn execute_clc(&mut self) -> bool {
+    fn execute_clc(&mut self) -> u32 {
         self.status.remove(StatusFlags::C);
-        false
+        0
     }
 
     #[inline]
-    fn execute_cld(&mut self) -> bool {
+    fn execute_cld(&mut self) -> u32 {
         self.status.remove(StatusFlags::D);
-        false
+        0
     }
 
     #[inline]
-    fn execute_cli(&mut self) -> bool {
+    fn execute_cli(&mut self) -> u32 {
         self.status.remove(StatusFlags::I);
-        false
+        0
     }
 
     #[inline]
-    fn execute_clv(&mut self) -> bool {
+    fn execute_clv(&mut self) -> u32 {
         self.status.remove(StatusFlags::V);
-        false
+        0
     }
 
     #[inline]
-    fn execute_sec(&mut self) -> bool {
+    fn execute_sec(&mut self) -> u32 {
         self.status.insert(StatusFlags::C);
-        false
+        0
     }
 
     #[inline]
-    fn execute_sed(&mut self) -> bool {
+    fn execute_sed(&mut self) -> u32 {
         self.status.insert(StatusFlags::D);
-        false
+        0
     }
 
     #[inline]
-    fn execute_sei(&mut self) -> bool {
+    fn execute_sei(&mut self) -> u32 {
         self.status.insert(StatusFlags::I);
-        false
+        0
     }
 
     #[inline]
-    fn execute_brk(&mut self) -> bool {
+    fn execute_brk(&mut self) -> u32 {
         self.pc += Wrapping(1);
         self.push_address(self.pc);
 
@@ -2114,20 +2114,20 @@ impl<'a> Cpu6502<'a> {
         self.status.remove(StatusFlags::B);
 
         self.pc = self.read_address(IRQ_VECTOR);
-        false
+        0
     }
 
     #[inline]
-    fn execute_rti(&mut self) -> bool {
+    fn execute_rti(&mut self) -> u32 {
         unsafe {
             self.status = StatusFlags::from_bits_unchecked(self.pop_word().0);
         }
         self.status.remove(StatusFlags::B | StatusFlags::U);
         self.pc = self.pop_address();
-        false
+        0
     }
 
-    fn execute_slo(&mut self, data: ExecutionData) -> bool {
+    fn execute_slo(&mut self, data: ExecutionData) -> u32 {
         let value = data.read_data(self);
         self.status.set(StatusFlags::C, (value.0 & 0x80) != 0);
 
@@ -2137,18 +2137,18 @@ impl<'a> Cpu6502<'a> {
         self.a |= tmp;
         self.set_zn_flags(self.a);
 
-        false
+        0
     }
 
     #[inline]
-    fn execute_anc(&mut self, data: ExecutionData) -> bool {
+    fn execute_anc(&mut self, data: ExecutionData) -> u32 {
         self.status.set(StatusFlags::C, (self.a.0 & 0x80) != 0);
         self.a &= data.read_data(self);
         self.set_zn_flags(self.a);
-        false
+        0
     }
 
-    fn execute_rla(&mut self, data: ExecutionData) -> bool {
+    fn execute_rla(&mut self, data: ExecutionData) -> u32 {
         let value = data.read_data(self);
         let tmp = ((value.0 as u16) << 1)
             | if self.status.contains(StatusFlags::C) {
@@ -2164,10 +2164,10 @@ impl<'a> Cpu6502<'a> {
         self.a &= new_value;
         self.set_zn_flags(self.a);
 
-        false
+        0
     }
 
-    fn execute_sre(&mut self, data: ExecutionData) -> bool {
+    fn execute_sre(&mut self, data: ExecutionData) -> u32 {
         let value = data.read_data(self);
         self.status.set(StatusFlags::C, (value.0 & 0x01) != 0);
 
@@ -2177,19 +2177,19 @@ impl<'a> Cpu6502<'a> {
         self.a ^= tmp;
         self.set_zn_flags(self.a);
 
-        false
+        0
     }
 
     #[inline]
-    fn execute_alr(&mut self, data: ExecutionData) -> bool {
+    fn execute_alr(&mut self, data: ExecutionData) -> u32 {
         self.a &= data.read_data(self);
         self.status.set(StatusFlags::C, (self.a.0 & 0x01) != 0);
         self.a >>= 1;
         self.set_zn_flags(self.a);
-        false
+        0
     }
 
-    fn execute_rra(&mut self, data: ExecutionData) -> bool {
+    fn execute_rra(&mut self, data: ExecutionData) -> u32 {
         let value = data.read_data(self);
         let tmp = (value >> 1)
             | if self.status.contains(StatusFlags::C) {
@@ -2204,7 +2204,7 @@ impl<'a> Cpu6502<'a> {
         self.execute_adc_sbc(right)
     }
 
-    fn execute_arr(&mut self, data: ExecutionData) -> bool {
+    fn execute_arr(&mut self, data: ExecutionData) -> u32 {
         self.a &= data.read_data(self);
         let tmp = (self.a >> 1)
             | if self.status.contains(StatusFlags::C) {
@@ -2214,65 +2214,65 @@ impl<'a> Cpu6502<'a> {
             };
         self.a = tmp;
         self.set_zn_flags(self.a);
-        false
+        0
     }
 
     #[inline]
-    fn execute_sax(&mut self, data: ExecutionData) -> bool {
+    fn execute_sax(&mut self, data: ExecutionData) -> u32 {
         data.write_data(self, self.a & self.x);
-        false
+        0
     }
 
     #[inline]
-    fn execute_xaa(&mut self, data: ExecutionData) -> bool {
+    fn execute_xaa(&mut self, data: ExecutionData) -> u32 {
         self.a = self.a & self.x & data.read_data(self);
         self.set_zn_flags(self.a);
-        false
+        0
     }
 
     #[inline]
-    fn execute_ahx(&mut self, data: ExecutionData) -> bool {
+    fn execute_ahx(&mut self, data: ExecutionData) -> u32 {
         data.write_data(self, self.a & self.x & data.read_data(self));
-        false
+        0
     }
 
     #[inline]
-    fn execute_tas(&mut self, data: ExecutionData) -> bool {
+    fn execute_tas(&mut self, data: ExecutionData) -> u32 {
         self.sp = self.a & self.x;
         data.write_data(self, self.a & self.x & data.read_data(self));
-        false
+        0
     }
 
     #[inline]
-    fn execute_shy(&mut self, data: ExecutionData) -> bool {
+    fn execute_shy(&mut self, data: ExecutionData) -> u32 {
         data.write_data(self, self.y & data.read_data(self));
-        false
+        0
     }
 
     #[inline]
-    fn execute_shx(&mut self, data: ExecutionData) -> bool {
+    fn execute_shx(&mut self, data: ExecutionData) -> u32 {
         data.write_data(self, self.x & data.read_data(self));
-        false
+        0
     }
 
     #[inline]
-    fn execute_lax(&mut self, data: ExecutionData) -> bool {
+    fn execute_lax(&mut self, data: ExecutionData) -> u32 {
         self.a = data.read_data(self);
         self.x = self.a;
         self.set_zn_flags(self.a);
-        false
+        0
     }
 
     #[inline]
-    fn execute_las(&mut self, data: ExecutionData) -> bool {
+    fn execute_las(&mut self, data: ExecutionData) -> u32 {
         self.a = data.read_data(self) & self.sp;
         self.x = self.a;
         self.sp = self.a;
         self.set_zn_flags(self.a);
-        false
+        0
     }
 
-    fn execute_dcp(&mut self, data: ExecutionData) -> bool {
+    fn execute_dcp(&mut self, data: ExecutionData) -> u32 {
         let value = data.read_data(self) - Wrapping(1);
         data.write_data(self, value);
 
@@ -2280,21 +2280,21 @@ impl<'a> Cpu6502<'a> {
         self.status.set(StatusFlags::C, self.a >= value);
         self.set_zn_flags(tmp);
 
-        false
+        0
     }
 
     #[inline]
-    fn execute_axs(&mut self, data: ExecutionData) -> bool {
+    fn execute_axs(&mut self, data: ExecutionData) -> u32 {
         let value = data.read_data(self);
         let tmp = (self.a & self.x) - value;
         self.status.set(StatusFlags::C, (self.a & self.x) >= value);
         self.set_zn_flags(tmp);
         self.x = tmp;
-        false
+        0
     }
 
     #[inline]
-    fn execute_isc(&mut self, data: ExecutionData) -> bool {
+    fn execute_isc(&mut self, data: ExecutionData) -> u32 {
         let value = data.read_data(self) + Wrapping(1);
         data.write_data(self, value);
 
@@ -2307,104 +2307,104 @@ impl<'a> Cpu6502<'a> {
     */
 
     #[inline]
-    fn execute_bra(&mut self, data: ExecutionData) -> bool {
+    fn execute_bra(&mut self, data: ExecutionData) -> u32 {
         self.pc = data.read_address();
-        true
+        1
     }
 
     #[inline]
-    fn execute_phx(&mut self) -> bool {
+    fn execute_phx(&mut self) -> u32 {
         self.push_word(self.x);
-        false
+        0
     }
 
     #[inline]
-    fn execute_phy(&mut self) -> bool {
+    fn execute_phy(&mut self) -> u32 {
         self.push_word(self.y);
-        false
+        0
     }
 
     #[inline]
-    fn execute_plx(&mut self) -> bool {
+    fn execute_plx(&mut self) -> u32 {
         self.x = self.pop_word();
         self.set_zn_flags(self.x);
-        false
+        0
     }
 
     #[inline]
-    fn execute_ply(&mut self) -> bool {
+    fn execute_ply(&mut self) -> u32 {
         self.y = self.pop_word();
         self.set_zn_flags(self.y);
-        false
+        0
     }
 
     #[inline]
-    fn execute_stz(&mut self, data: ExecutionData) -> bool {
+    fn execute_stz(&mut self, data: ExecutionData) -> u32 {
         data.write_data(self, Wrapping(0));
-        false
+        0
     }
 
     #[inline]
-    fn execute_trb(&mut self, data: ExecutionData) -> bool {
+    fn execute_trb(&mut self, data: ExecutionData) -> u32 {
         let mut value = data.read_data(self).0;
         value &= !self.a.0;
         self.status.set(StatusFlags::Z, value == 0);
         data.write_data(self, Wrapping(value));
 
-        false
+        0
     }
 
     #[inline]
-    fn execute_tsb(&mut self, data: ExecutionData) -> bool {
+    fn execute_tsb(&mut self, data: ExecutionData) -> u32 {
         let mut value = data.read_data(self).0;
         value |= self.a.0;
         self.status.set(StatusFlags::Z, value == 0);
         data.write_data(self, Wrapping(value));
 
-        false
+        0
     }
 
     #[inline]
-    fn execute_bbr(&mut self, data: ExecutionData, n: usize) -> bool {
+    fn execute_bbr(&mut self, data: ExecutionData, n: usize) -> u32 {
         let value = data.read_data(self).0;
 
         if (value & (0x01 << n)) == 0 {
             self.pc = data.read_address();
-            true
+            1
         } else {
-            false
+            0
         }
     }
 
     #[inline]
-    fn execute_bbs(&mut self, data: ExecutionData, n: usize) -> bool {
+    fn execute_bbs(&mut self, data: ExecutionData, n: usize) -> u32 {
         let value = data.read_data(self).0;
 
         if (value & (0x01 << n)) != 0 {
             self.pc = data.read_address();
-            true
+            1
         } else {
-            false
+            0
         }
     }
 
     #[inline]
-    fn execute_rmb(&mut self, data: ExecutionData, n: usize) -> bool {
+    fn execute_rmb(&mut self, data: ExecutionData, n: usize) -> u32 {
         let mut value = data.read_data(self).0;
         value &= !(0x01 << n);
         self.status.set(StatusFlags::Z, value == 0);
         data.write_data(self, Wrapping(value));
 
-        false
+        0
     }
 
     #[inline]
-    fn execute_smb(&mut self, data: ExecutionData, n: usize) -> bool {
+    fn execute_smb(&mut self, data: ExecutionData, n: usize) -> u32 {
         let mut value = data.read_data(self).0;
         value |= 0x01 << n;
         self.status.set(StatusFlags::Z, value == 0);
         data.write_data(self, Wrapping(value));
 
-        false
+        0
     }
 }
