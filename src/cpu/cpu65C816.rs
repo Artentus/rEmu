@@ -87,8 +87,10 @@ bitflags! {
 enum AddressingMode {
     /// Implied
     IMP,
-    /// Immediate
-    IMM,
+    /// Immediate byte
+    IMB,
+    /// Immediate word
+    IMW,
     /// Zero-page
     ZP0,
     /// Zero-page + relative offset
@@ -97,16 +99,24 @@ enum AddressingMode {
     ZPX,
     /// Zero-page + Y register offset
     ZPY,
-    /// Relative
-    REL,
+    /// Relative byte
+    REB,
+    /// Relative word
+    REW,
     /// Absolute
     ABS,
+    /// Absolute long
+    ABL,
     /// Absolute + X register offset
     ABX,
     /// Absolute + Y register offset
     ABY,
+    /// Absolute long + X register offset
+    ALX,
     /// Indirect
     IND,
+    /// Indirect long
+    INL,
     /// Indirect zero page
     IZP,
     /// Indirect (zero-page + X register offset)

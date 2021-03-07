@@ -7,7 +7,9 @@ extern crate bitflags;
 use audio::SampleBuffer;
 use ggez::conf::{NumSamples, WindowMode, WindowSetup};
 use ggez::event::{EventHandler, KeyCode};
-use ggez::graphics::{DrawParam, FilterMode, Font, Image, Text, TextFragment, WrapMode};
+use ggez::graphics::{DrawParam, FilterMode, Font, Image, WrapMode};
+#[allow(unused_imports)]
+use ggez::graphics::{Text, TextFragment};
 use ggez::{event, graphics, timer, Context, ContextBuilder, GameResult};
 use scaler::Scaler;
 use std::cell::RefCell;
@@ -41,6 +43,7 @@ const SCREEN_SCALE: f32 = 4.0;
 const ASPECT_RATIO: AspectRatio = AspectRatio::FourByThree;
 const SCALER: Scaler = scaler::NONE;
 const FILTER: FilterMode = FilterMode::Nearest;
+const SHOW_DEBUG_INFO: bool = true;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 #[allow(dead_code)]
@@ -179,7 +182,7 @@ fn run_emu<P: AsRef<Path>>(
         .window_mode(window_mode);
     let (ref mut ctx, ref mut event_loop) = builder.build()?;
 
-    const FONT_BYTES: &[u8] = include_bytes!("../res/SourceCodePro-Regular.ttf");
+    const FONT_BYTES: &[u8] = include_bytes!("../res/SourceCodePro-Bold.ttf");
     let font = Font::new_glyph_font_bytes(ctx, FONT_BYTES)?;
 
     let (_stream, stream_handle) = rodio::OutputStream::try_default()?;
@@ -208,7 +211,8 @@ struct EmuState<'a> {
     scale: [f32; 2],
     scaler: Scaler,
     filter: FilterMode,
-    _cartridge: Rc<RefCell<Cartridge>>,
+    #[allow(dead_code)]
+    cartridge: Rc<RefCell<Cartridge>>,
     controller_0: Buttons,
     controller_1: Buttons,
     scaler_output_buffer: Option<Box<[Color]>>,
@@ -237,7 +241,7 @@ impl<'a> EmuState<'a> {
             scale: [scale as f32 * aspect_ratio.width_factor(), scale as f32],
             scaler,
             filter,
-            _cartridge: cartridge,
+            cartridge,
             controller_0: Buttons::empty(),
             controller_1: Buttons::empty(),
             scaler_output_buffer: None,
@@ -292,6 +296,9 @@ impl<'a> EventHandler for EmuState<'a> {
                 Some(vec![Color::BLACK; scaled_buffer_size].into_boxed_slice());
         }
 
+        let scaled_screen_width = screen_width * self.scaler.scale_factor();
+        let scaled_screen_height = screen_height * self.scaler.scale_factor();
+
         let output_buffer_ref = &mut self.scaler_output_buffer;
         if let Some(scaled_pixel_buffer) = output_buffer_ref {
             self.scaler.scale(
@@ -303,8 +310,8 @@ impl<'a> EventHandler for EmuState<'a> {
 
             let mut screen = Image::from_rgba8(
                 ctx,
-                (screen_width * self.scaler.scale_factor()) as u16,
-                (screen_height * self.scaler.scale_factor()) as u16,
+                scaled_screen_width as u16,
+                scaled_screen_height as u16,
                 pixels_to_data(&scaled_pixel_buffer),
             )?;
             screen.set_filter(self.filter);
@@ -314,21 +321,31 @@ impl<'a> EventHandler for EmuState<'a> {
             graphics::draw(ctx, &screen, params)?;
         }
 
-        /*
-        if !self.run {
+        if SHOW_DEBUG_INFO {
+            const TEXT_SCALE: graphics::Scale = graphics::Scale { x: 20.0, y: 20.0 };
+            const TEXT_BACK_COLOR: graphics::Color = graphics::Color::new(0.0, 0.0, 0.0, 1.0);
+            const TEXT_FRONT_COLOR: graphics::Color = graphics::Color::new(0.5, 1.0, 0.0, 1.0);
+
             let emu_info = format!("{}", self.emu);
-            let emu_info_frag = TextFragment::new(emu_info).font(self.font);
+            let emu_info_frag = TextFragment::new(emu_info)
+                .font(self.font)
+                .scale(TEXT_SCALE);
             let emu_info_text = Text::new(emu_info_frag);
             graphics::draw(
                 ctx,
                 &emu_info_text,
-                DrawParam::default().dest([
-                    ((screen_width * self.scaler.scale_factor()) as f32) * self.scale[0] + 10.0,
-                    10.0,
-                ]),
+                DrawParam::default()
+                    .dest([11.0, 11.0])
+                    .color(TEXT_BACK_COLOR),
+            )?;
+            graphics::draw(
+                ctx,
+                &emu_info_text,
+                DrawParam::default()
+                    .dest([10.0, 10.0])
+                    .color(TEXT_FRONT_COLOR),
             )?;
         }
-        */
 
         graphics::present(ctx)?;
         timer::yield_now();
