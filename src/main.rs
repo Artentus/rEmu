@@ -7,7 +7,7 @@ extern crate bitflags;
 use audio::SampleBuffer;
 use ggez::conf::{NumSamples, WindowMode, WindowSetup};
 use ggez::event::{EventHandler, KeyCode};
-use ggez::graphics::{DrawParam, FilterMode, Font, Image, WrapMode};
+use ggez::graphics::{DrawParam, FilterMode, Font, Image, WrapMode, PxScale};
 #[allow(unused_imports)]
 use ggez::graphics::{Text, TextFragment};
 use ggez::{event, graphics, timer, Context, ContextBuilder, GameResult};
@@ -165,7 +165,7 @@ fn run_emu<P: AsRef<Path>>(
         .title(&format!("{} v{}", TITLE, VERSION))
         .vsync(true)
         .srgb(true)
-        .samples(NumSamples::Zero); // We draw 2D sprites only
+        .samples(NumSamples::One); // We draw 2D sprites only
 
     let (width, height) = {
         let screen_buffer = emu.screen();
@@ -180,17 +180,17 @@ fn run_emu<P: AsRef<Path>>(
     let builder = ContextBuilder::new(TITLE, AUTHOR)
         .window_setup(window_setup)
         .window_mode(window_mode);
-    let (ref mut ctx, ref mut event_loop) = builder.build()?;
+    let (mut ctx, event_loop) = builder.build()?;
 
     const FONT_BYTES: &[u8] = include_bytes!("../res/SourceCodePro-Bold.ttf");
-    let font = Font::new_glyph_font_bytes(ctx, FONT_BYTES)?;
+    let font = Font::new_glyph_font_bytes(&mut ctx, FONT_BYTES)?;
 
     let (_stream, stream_handle) = rodio::OutputStream::try_default()?;
     let audio_buffer = Arc::new(Mutex::new(SampleBuffer::new(1024 * 1024)));
     let audio_source = SampleBufferSource::new(Arc::clone(&audio_buffer));
     stream_handle.play_raw(audio_source)?;
 
-    let mut state = EmuState::new(
+    let state = EmuState::new(
         emu,
         scale,
         aspect_ratio,
@@ -201,9 +201,7 @@ fn run_emu<P: AsRef<Path>>(
         cartridge_file,
     );
 
-    event::run(ctx, event_loop, &mut state)?;
-
-    Ok(())
+    event::run(ctx, event_loop, state)
 }
 
 struct EmuState<'a> {
@@ -273,7 +271,7 @@ impl<'a> EventHandler for EmuState<'a> {
     }
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
-        graphics::clear(ctx, ggez::graphics::BLACK);
+        graphics::clear(ctx, ggez::graphics::Color::BLACK);
 
         let screen_buffer = self.emu.screen();
         let screen_width = screen_buffer.width();
@@ -322,7 +320,7 @@ impl<'a> EventHandler for EmuState<'a> {
         }
 
         if SHOW_DEBUG_INFO {
-            const TEXT_SCALE: graphics::Scale = graphics::Scale { x: 20.0, y: 20.0 };
+            const TEXT_SCALE: PxScale = PxScale { x: 20.0, y: 20.0 };
             const TEXT_BACK_COLOR: graphics::Color = graphics::Color::new(0.0, 0.0, 0.0, 1.0);
             const TEXT_FRONT_COLOR: graphics::Color = graphics::Color::new(0.5, 1.0, 0.0, 1.0);
 

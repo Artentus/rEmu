@@ -12,7 +12,7 @@ strum_macros = "0.20"
 bytemuck = "1.5"
 gfx = "0.18"
 gfx_device_gl = "0.16"
-ggez = "0.5"
+ggez = "0.6.0-rc1"
 rodio = "0.13"
 packed_simd = { version = "0.3.4", package = "packed_simd_2" }
 rayon = "1.5"
